@@ -1,4 +1,4 @@
-<title>Slime Bash</title>
+<title>Demonic Flame</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
   :root{
@@ -127,53 +127,103 @@
     display:flex;
     align-items:center;
     justify-content:center;
-    background:rgba(10,8,14,0.72);
+    background:radial-gradient(ellipse at center, rgba(40,12,6,0.6), rgba(5,3,4,0.9));
     backdrop-filter:blur(2px);
   }
   .overlay[hidden]{ display:none; }
   .panel{
-    background:var(--paper-raised);
-    border:1px solid var(--paper-border);
+    position:relative;
+    overflow:hidden;
+    background:
+      radial-gradient(circle at 18% 12%, rgba(255,120,40,0.16), transparent 40%),
+      radial-gradient(circle at 85% 88%, rgba(255,80,20,0.14), transparent 45%),
+      linear-gradient(180deg, #1c0f09 0%, #120906 55%, #0a0504 100%);
+    border:1px solid #3d1a0c;
     border-radius:14px;
     padding:28px 32px;
     max-width:420px;
     width:min(88%,420px);
     text-align:center;
-    box-shadow:var(--shadow-soft);
+    box-shadow:0 14px 44px rgba(0,0,0,0.65), 0 0 46px rgba(255,90,30,0.16), inset 0 0 30px rgba(0,0,0,0.5);
+  }
+  .panel::before{
+    content:"";
+    position:absolute;
+    inset:-20%;
+    background:
+      radial-gradient(circle at 20% 25%, rgba(255,150,50,0.4), transparent 22%),
+      radial-gradient(circle at 82% 18%, rgba(255,90,20,0.32), transparent 24%),
+      radial-gradient(circle at 65% 82%, rgba(255,170,60,0.34), transparent 22%),
+      radial-gradient(circle at 22% 85%, rgba(255,100,30,0.3), transparent 20%);
+    filter:blur(6px);
+    opacity:0.55;
+    animation:lavaGlow 6s ease-in-out infinite;
+    pointer-events:none;
+  }
+  .panel::after{
+    content:"";
+    position:absolute;
+    left:0; right:0; bottom:0;
+    height:5px;
+    background:linear-gradient(90deg,#2a0a02,#ff7a1f,#ffd27a,#ff7a1f,#2a0a02);
+    background-size:220% 100%;
+    animation:lavaFlow 3.2s linear infinite;
+    box-shadow:0 0 16px 2px rgba(255,120,30,0.75);
+  }
+  .panel > *{ position:relative; z-index:1; }
+  @keyframes lavaGlow{
+    0%,100%{ opacity:0.45; transform:scale(1); }
+    50%{ opacity:0.75; transform:scale(1.06); }
+  }
+  @keyframes lavaFlow{
+    0%{ background-position:0% 0%; }
+    100%{ background-position:220% 0%; }
   }
   .panel h2{
     font-family:"Press Start 2P","IBM Plex Mono",monospace;
     font-size:16px;
     margin:0 0 14px;
-    color:var(--ink);
+    color:#ffdcb0;
     letter-spacing:0.5px;
+    text-shadow:0 0 8px rgba(255,120,30,0.8), 0 0 20px rgba(255,60,10,0.5);
+    animation:titleFlicker 2.6s ease-in-out infinite;
+  }
+  @keyframes titleFlicker{
+    0%,100%{ text-shadow:0 0 8px rgba(255,120,30,0.8), 0 0 20px rgba(255,60,10,0.5); }
+    50%{ text-shadow:0 0 13px rgba(255,165,70,1), 0 0 28px rgba(255,80,20,0.7); }
   }
   .panel p{
     margin:0 0 18px;
-    color:var(--muted);
+    color:#cba58a;
     font-size:14px;
     line-height:1.65;
   }
+  .panel p:empty{ display:none; }
   .panel .stat{
     font-family:"Press Start 2P","IBM Plex Mono",monospace;
-    color:var(--accent);
+    color:#ff9a4d;
     font-size:13px;
   }
   button.playbtn{
     font-family:"Press Start 2P","IBM Plex Mono",monospace;
     font-size:13px;
-    background:var(--accent);
-    color:var(--accent-ink);
-    border:none;
+    background:linear-gradient(180deg,#ff9450,#e8431f);
+    color:#200a03;
+    border:1px solid #7a2a0a;
     padding:14px 22px;
     border-radius:8px;
     cursor:pointer;
     letter-spacing:0.5px;
-    box-shadow:0 4px 0 rgba(0,0,0,0.25);
+    box-shadow:0 4px 0 rgba(0,0,0,0.4), 0 0 16px rgba(255,110,30,0.5);
     transition:transform 0.08s ease;
+    animation:btnPulse 2.6s ease-in-out infinite;
+  }
+  @keyframes btnPulse{
+    0%,100%{ box-shadow:0 4px 0 rgba(0,0,0,0.4), 0 0 14px rgba(255,110,30,0.42); }
+    50%{ box-shadow:0 4px 0 rgba(0,0,0,0.4), 0 0 26px rgba(255,150,60,0.78); }
   }
   button.playbtn:hover{ transform:translateY(-1px); }
-  button.playbtn:active{ transform:translateY(2px); box-shadow:0 2px 0 rgba(0,0,0,0.25); }
+  button.playbtn:active{ transform:translateY(2px); box-shadow:0 2px 0 rgba(0,0,0,0.4); }
   button.playbtn:focus-visible{ outline:3px solid var(--grass); outline-offset:2px; }
 
   .controls{
@@ -205,24 +255,25 @@
   }
 
   @media (prefers-reduced-motion: reduce){
-    button.playbtn{ transition:none; }
+    button.playbtn{ transition:none; animation:none; }
+    .panel::before, .panel::after, .panel h2{ animation:none; }
   }
 </style>
 
 <div class="wrap">
   <div class="masthead">
-    <h1>SLIME <span class="accent">BASH</span></h1>
+    <h1>DEMONIC <span class="accent">FLAME</span></h1>
     <p class="tagline">Run the ridge, clear the slimes, and plant the flag before your HP hits zero.</p>
   </div>
 
   <div class="cabinet">
     <div class="stage">
-      <canvas id="game" width="960" height="540" tabindex="0" aria-label="Slime Bash game canvas"></canvas>
+      <canvas id="game" width="960" height="540" tabindex="0" aria-label="Demonic Flame game canvas"></canvas>
       <div class="overlay" id="overlay">
         <div class="panel">
-          <h2 id="overlayTitle">SLIME BASH</h2>
-          <p id="overlayText">Move with the arrow keys or A / D. Arrow Up to jump. Space to swing your blade. Defeat 6 imps and press X to ignite. Three imp packs stand between you and the flag.</p>
-          <button class="playbtn" id="overlayBtn">Start Game</button>
+          <h2 id="overlayTitle">DEMONIC FLAME</h2>
+          <p id="overlayText"></p>
+          <button class="playbtn" id="overlayBtn">Enter the Void</button>
         </div>
       </div>
     </div>
@@ -242,6 +293,46 @@
   var canvas = document.getElementById("game");
   var ctx = canvas.getContext("2d");
   var VW = canvas.width, VH = canvas.height;
+
+  // ---------- Background music ----------
+  // Starts on the player's first interaction with the start overlay (or a
+  // restart), which doubles as the user gesture browsers require before
+  // audio is allowed to play, so it effectively begins "as soon as the
+  // game loads" from the player's perspective.
+  var bgMusic = new Audio("assets/bgmusic.mp3");
+  bgMusic.loop = true;
+  bgMusic.volume = 0.45;
+  bgMusic.preload = "auto";
+  var musicStarted = false;
+  function startMusic(){
+    if (musicStarted) return;
+    musicStarted = true;
+    var p = bgMusic.play();
+    if (p && p.catch) p.catch(function(){ musicStarted = false; });
+  }
+  // Try to play immediately on load. Most browsers block audible autoplay
+  // before any user gesture, so if that attempt is rejected, fall back to
+  // starting on the very first interaction anywhere on the page (a click,
+  // key press, or touch) rather than waiting specifically for the Start
+  // button - whichever comes first.
+  startMusic();
+  ["pointerdown", "keydown", "touchstart"].forEach(function(evt){
+    document.addEventListener(evt, startMusic, { capture: true, once: true });
+  });
+
+  // One-shot "evil laugh" stinger on every game start/restart. This is a
+  // separate Audio instance from bgMusic, so playing it never touches or
+  // interrupts the looping background track already running.
+  var sfxLaugh = new Audio("assets/sfx_laugh.mp3");
+  sfxLaugh.volume = 0.85;
+  sfxLaugh.preload = "auto";
+  function playStartLaugh(){
+    try {
+      sfxLaugh.currentTime = 0;
+      var p = sfxLaugh.play();
+      if (p && p.catch) p.catch(function(){});
+    } catch(e) {}
+  }
 
   // ---------- Backdrop art (moonlit forest overlooking the city) ----------
   var bgImg = new Image();
@@ -305,7 +396,7 @@
     });
   })();
 
-  // Fire-elemental "ignited" form sprites (unlocked at 6+ imps, activated with X).
+  // Fire-elemental "ignited" form sprites (unlocked at 4+ imps, activated with X).
   var FIRE_SPRITES = {};
   (function(){
     var sources = {
@@ -415,6 +506,8 @@
   // ---------- Player ----------
   var GRAVITY = 0.62;
   var MOVE_SPEED = 4.2;
+  var SUPER_SPEED_MULT = 2.1; // fire-elemental form moves much faster
+  var SUPER_MODE_DURATION = 15 * 60; // fire form lasts 15 real seconds (dt ~ 1 per frame @60fps)
   var JUMP_V = -13.2;
   var MAX_FALL = 16;
 
@@ -426,7 +519,7 @@
       x: 60, y: GROUND_Y - 46, w: 30, h: 46, vx:0, vy:0,
       facing: 1, onGround:false, hp: 4, maxHp:4,
       invuln:0, attackT:0, attackCd:0, walkCycle:0,
-      superMode:false
+      superMode:false, superTimer:0
     };
     enemies = enemySpawns.map(function(e){ return makeEnemy(e[0],e[1],e[2],e[3]); });
     camX = 0;
@@ -438,11 +531,15 @@
     gameState = "playing";
   }
 
-  // Fiery power-up: once you've defeated 6+ imps, pressing X ignites the
+  // Fiery power-up: once you've defeated 4+ imps, pressing X ignites the
   // player permanently into the fire-elemental form, with a one-shot
-  // particle explosion + screen shake for impact.
+  // particle explosion + screen shake for impact. While ignited the player
+  // moves much faster and is overpowered: simply touching an enemy kills it
+  // instantly instead of costing a hit. The form lasts 15 seconds, after
+  // which the player reverts to normal and the imp counter resets to 0.
   function triggerSuperMode(){
     player.superMode = true;
+    player.superTimer = SUPER_MODE_DURATION;
     shake = 14;
     var cx = player.x + player.w/2, cy = player.y + player.h/2;
     explosionFlash = { x: cx, y: cy, t: 0, maxT: 18 };
@@ -532,7 +629,7 @@
     if (gameState === "start" && (e.code === "ArrowUp" || e.code === "Enter")) {
       startGame();
     }
-    if (e.code === "KeyX" && gameState === "playing" && !player.superMode && score >= 6) {
+    if (e.code === "KeyX" && gameState === "playing" && !player.superMode && score >= 4) {
       triggerSuperMode();
     }
   });
@@ -545,6 +642,8 @@
     resetGame();
     overlay.hidden = true;
     canvas.focus();
+    startMusic();
+    playStartLaugh();
   }
   overlayBtn.addEventListener("click", startGame);
   gameState = "start";
@@ -582,8 +681,9 @@
     var left = keys.ArrowLeft || keys.KeyA;
     var right = keys.ArrowRight || keys.KeyD;
 
-    if (left && !right){ player.vx = -MOVE_SPEED; player.facing = -1; }
-    else if (right && !left){ player.vx = MOVE_SPEED; player.facing = 1; }
+    var curSpeed = player.superMode ? MOVE_SPEED * SUPER_SPEED_MULT : MOVE_SPEED;
+    if (left && !right){ player.vx = -curSpeed; player.facing = -1; }
+    else if (right && !left){ player.vx = curSpeed; player.facing = 1; }
     else player.vx = 0;
 
     if (keys.ArrowUp && player.onGround){
@@ -609,6 +709,15 @@
     if (player.invuln > 0) player.invuln -= dt;
     if (shake > 0) shake -= dt;
     updateExplosionFx(dt);
+
+    if (player.superMode){
+      player.superTimer -= dt;
+      if (player.superTimer <= 0){
+        player.superMode = false;
+        player.superTimer = 0;
+        score = 0;
+      }
+    }
 
     var hitbox = null;
     if (player.attackT > 8){
@@ -638,6 +747,13 @@
         en.hitFlash = 10;
         score += 1;
         shake = 8;
+      } else if (player.superMode && intersects(player, en)){
+        // overpowered in fire form: mere contact instantly kills the enemy
+        // and the player takes no damage at all.
+        en.alive = false;
+        en.hitFlash = 10;
+        score += 1;
+        shake = 6;
       } else if (player.invuln <= 0 && intersects(player, en)){
         player.hp -= 1;
         player.invuln = 65;
@@ -794,7 +910,7 @@
     walk0: true, walk2: true, walk4: true, walk6: true, jump: true
   };
 
-  // Fire-elemental "ignited" form, unlocked once 6+ imps are defeated and
+  // Fire-elemental "ignited" form, unlocked once 4+ imps are defeated and
   // activated with X. The run frames' leading leg (the real tell for facing,
   // not which hand holds the fireball) plus the reach/throw attack and the
   // collapsed death frame are all natively right-facing.
@@ -840,10 +956,12 @@
   }
 
   function drawTorchCounter(){
-    // Torch state advances with score (imps defeated), capping at the final,
-    // fully-ablaze sprite once score reaches the top of the range so it
-    // never resets or overflows past the last frame.
-    var idx = Math.min(score, TORCH_IMAGES.length - 1);
+    // Torch state advances with score (imps defeated). Score 0 already shows
+    // the first lit/ember sprite (index 1) rather than the fully unlit stick
+    // (index 0, no longer reachable), so every state is shifted up by one.
+    // Capping at the final, fully-ablaze sprite once score reaches the top
+    // of the range so it never resets or overflows past the last frame.
+    var idx = Math.min(score + 1, TORCH_IMAGES.length - 1);
     var img = TORCH_IMAGES[idx];
 
     if (img && img.ready){
@@ -985,7 +1103,15 @@
     if (lastTime === null) lastTime = ts;
     var dtMs = ts - lastTime;
     lastTime = ts;
-    var dt = Math.min(2.5, dtMs / 16.6667);
+    var dt = dtMs / 16.6667;
+    // A big stall (audio decoding, tab backgrounded, a GC pause, etc.) would
+    // otherwise inject one oversized physics step - e.g. applying several
+    // frames' worth of gravity in a single frame cuts a jump's upward
+    // velocity down disproportionately, making it peak lower than normal.
+    // Past a certain gap, skip that frame's simulation entirely rather than
+    // trying to catch up; moderate lag still gets clamped and caught up.
+    if (dt > 5) dt = 0;
+    else if (dt > 2.5) dt = 2.5;
 
     update(dt);
     render();
