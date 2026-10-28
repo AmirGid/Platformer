@@ -1,3 +1,8 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#12141c">
 <title>Demonic Flame</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
@@ -254,7 +259,127 @@
     text-align:center;
   }
 
+  /* ---------- Touch devices (phones / tablets) ----------
+     The <html> element gets the "touch" class from JS when the device has a
+     touch screen. "menu" is set while the start / game-over panel shows. */
+  .touchpad, .rotate-hint{ display:none; }
+  html.touch, html.touch body{ overscroll-behavior:none; }
+  html.touch body{
+    margin:0;
+    min-height:100vh;
+    min-height:100dvh;
+    overflow:hidden;
+    touch-action:none;
+    -webkit-user-select:none;
+    user-select:none;
+    -webkit-touch-callout:none;
+    -webkit-tap-highlight-color:transparent;
+    padding:max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
+            max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  }
+  html.touch .controls{ display:none; }
+  html.touch .wrap{ gap:12px; }
+  html.touch .cabinet{ padding:6px; border-radius:14px; }
+  html.touch .cabinet::before{ display:none; }
+  html.touch button.playbtn{ touch-action:manipulation; }
+
+  html.touch .touchpad{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    width:100%;
+    max-width:984px;
+    transition:opacity 0.15s ease;
+  }
+  html.touch.menu .touchpad{ visibility:hidden; opacity:0; }
+  .pad-cluster{ display:flex; gap:14px; align-items:flex-end; }
+  .pad-right{ gap:12px; }
+  .tbtn{
+    width:72px;
+    height:72px;
+    border-radius:50%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:system-ui, sans-serif;
+    font-size:26px;
+    line-height:1;
+    color:#ffe2c4;
+    background:radial-gradient(circle at 50% 35%, rgba(90,40,20,0.75), rgba(20,8,4,0.75));
+    border:2px solid rgba(255,140,60,0.55);
+    box-shadow:0 4px 0 rgba(0,0,0,0.45), 0 0 12px rgba(255,100,30,0.25);
+    touch-action:none;
+    cursor:pointer;
+  }
+  .tbtn small{ font-family:"Press Start 2P","IBM Plex Mono",monospace; font-size:9px; letter-spacing:0.5px; }
+  .tbtn.pressed{
+    transform:translateY(3px);
+    background:radial-gradient(circle at 50% 35%, rgba(255,140,60,0.85), rgba(120,30,10,0.85));
+    box-shadow:0 1px 0 rgba(0,0,0,0.45), 0 0 18px rgba(255,140,60,0.6);
+  }
+  .tbtn-jump{ width:84px; height:84px; font-size:30px; }
+  .tbtn-attack{ margin-bottom:26px; }
+  .tbtn-ignite{
+    visibility:hidden;
+    margin-bottom:60px;
+    width:62px; height:62px;
+    border-color:#ffd27a;
+    animation:btnPulse 1.6s ease-in-out infinite;
+  }
+  .tbtn-ignite.ready{ visibility:visible; }
+
+  /* Portrait: game on top, buttons underneath, plus a hint to rotate. */
+  @media (orientation: portrait){
+    html.touch .rotate-hint{
+      display:block;
+      margin:0;
+      color:var(--muted);
+      font-size:13px;
+      text-align:center;
+    }
+    html.touch .touchpad{ margin-top:auto; }
+    html.touch .wrap{ min-height:calc(100dvh - 40px); }
+  }
+
+  /* Landscape: game fills the screen, buttons float over its bottom corners. */
+  @media (orientation: landscape){
+    html.touch body{ align-items:center; padding-top:0; padding-bottom:0; background:#05060a; }
+    html.touch .masthead{ display:none; }
+    html.touch .wrap{ max-width:none; }
+    html.touch .cabinet{
+      padding:0;
+      border-radius:0;
+      background:none;
+      box-shadow:none;
+      max-width:none;
+      width:min(100%, calc(100vh * 16 / 9));
+      width:min(100%, calc(100dvh * 16 / 9));
+    }
+    html.touch .stage{ border-radius:0; }
+    html.touch .touchpad{
+      position:fixed;
+      left:0; right:0; bottom:0;
+      max-width:none;
+      padding:0 max(18px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+      pointer-events:none;
+    }
+    html.touch .tbtn{ pointer-events:auto; opacity:0.85; }
+  }
+
+  /* Small game area: shrink the start / game-over panel so it still fits. */
+  @media (max-height:460px), (max-width:560px){
+    .panel{ padding:16px 18px; }
+    .panel h2{ font-size:13px; margin-bottom:10px; }
+    .panel p{ font-size:12px; line-height:1.5; margin-bottom:12px; }
+    button.playbtn{ font-size:11px; padding:11px 16px; }
+  }
+  @media (max-width:420px){
+    .tbtn{ width:64px; height:64px; font-size:22px; }
+    .tbtn-jump{ width:76px; height:76px; }
+  }
+
   @media (prefers-reduced-motion: reduce){
+    .tbtn-ignite{ animation:none; }
     button.playbtn{ transition:none; animation:none; }
     .panel::before, .panel::after, .panel h2{ animation:none; }
   }
@@ -279,10 +404,27 @@
     </div>
   </div>
 
+  <p class="rotate-hint">Turn your device sideways for a bigger view.</p>
+
+  <!-- On-screen buttons, shown only on touch devices. Each data-key is the
+       keyboard code it presses, so the game logic treats them like keys. -->
+  <div class="touchpad" id="touchpad" aria-hidden="true">
+    <div class="pad-cluster pad-left">
+      <div class="tbtn" data-key="ArrowLeft">&#9664;</div>
+      <div class="tbtn" data-key="ArrowRight">&#9654;</div>
+    </div>
+    <div class="pad-cluster pad-right">
+      <div class="tbtn tbtn-ignite" data-key="KeyX" id="igniteBtn"><small>FIRE</small></div>
+      <div class="tbtn tbtn-attack" data-key="Space"><small>ATK</small></div>
+      <div class="tbtn tbtn-jump" data-key="ArrowUp">&#9650;</div>
+    </div>
+  </div>
+
   <div class="controls">
     <div class="ctrl"><span class="key">&#8592;</span><span class="key">&#8594;</span> or <span class="key">A</span><span class="key">D</span> move</div>
     <div class="ctrl"><span class="key">&#8593;</span> jump</div>
     <div class="ctrl"><span class="key">SPACE</span> attack</div>
+    <div class="ctrl"><span class="key">X</span> fire form (4+ imps)</div>
     <div class="ctrl"><span class="key">R</span> restart</div>
   </div>
 </div>
@@ -620,28 +762,111 @@
   var keys = {};
   var WATCHED = ["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Space","KeyA","KeyD","KeyR","KeyX"];
 
-  window.addEventListener("keydown", function(e){
-    if (WATCHED.indexOf(e.code) !== -1) e.preventDefault();
-    keys[e.code] = true;
-    if (e.code === "KeyR" && (gameState === "gameover" || gameState === "win")) {
+  // Shared by the keyboard and the on-screen touch buttons.
+  function pressKey(code){
+    keys[code] = true;
+    if (code === "KeyR" && (gameState === "gameover" || gameState === "win")) {
       startGame();
     }
-    if (gameState === "start" && (e.code === "ArrowUp" || e.code === "Enter")) {
+    if (gameState === "start" && (code === "ArrowUp" || code === "Enter")) {
       startGame();
     }
-    if (e.code === "KeyX" && gameState === "playing" && !player.superMode && score >= 4) {
+    if (code === "KeyX" && gameState === "playing" && !player.superMode && score >= 4) {
       triggerSuperMode();
     }
+  }
+  function releaseKey(code){
+    keys[code] = false;
+  }
+
+  window.addEventListener("keydown", function(e){
+    if (WATCHED.indexOf(e.code) !== -1) e.preventDefault();
+    pressKey(e.code);
   });
   window.addEventListener("keyup", function(e){
-    keys[e.code] = false;
+    releaseKey(e.code);
   });
   canvas.addEventListener("mousedown", function(){ canvas.focus(); });
 
+  // ---------- Touch controls ----------
+  var root = document.documentElement;
+  var touchpad = document.getElementById("touchpad");
+  var igniteBtn = document.getElementById("igniteBtn");
+  var padButtons = touchpad.querySelectorAll("[data-key]");
+  var touchHeld = {};
+
+  function enableTouchMode(){ root.classList.add("touch"); }
+  if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) enableTouchMode();
+  // Touch-screen laptops report a fine pointer, so also switch on first touch.
+  window.addEventListener("touchstart", enableTouchMode, { capture: true, once: true, passive: true });
+
+  // Every touch event re-checks which button sits under each finger. That
+  // supports several fingers at once (run + jump + attack) and sliding a
+  // thumb from one button to the next without lifting it.
+  function syncTouches(e){
+    if (e.cancelable) e.preventDefault();
+    var now = {};
+    for (var i = 0; i < e.touches.length; i++){
+      var t = e.touches[i];
+      var el = document.elementFromPoint(t.clientX, t.clientY);
+      var btn = el && el.closest ? el.closest("[data-key]") : null;
+      if (btn && touchpad.contains(btn)) now[btn.getAttribute("data-key")] = true;
+    }
+    Object.keys(now).forEach(function(code){ if (!touchHeld[code]) pressKey(code); });
+    Object.keys(touchHeld).forEach(function(code){ if (!now[code]) releaseKey(code); });
+    touchHeld = now;
+    for (var j = 0; j < padButtons.length; j++){
+      var b = padButtons[j];
+      b.classList.toggle("pressed", !!now[b.getAttribute("data-key")]);
+    }
+  }
+  ["touchstart", "touchmove", "touchend", "touchcancel"].forEach(function(evt){
+    touchpad.addEventListener(evt, syncTouches, { passive: false });
+  });
+  // Stop iOS pinch / double-tap zoom from hijacking the game.
+  document.addEventListener("gesturestart", function(e){ e.preventDefault(); });
+  document.addEventListener("dblclick", function(e){ if (root.classList.contains("touch")) e.preventDefault(); });
+
+  function releaseAllKeys(){
+    Object.keys(keys).forEach(function(code){ keys[code] = false; });
+    touchHeld = {};
+    for (var j = 0; j < padButtons.length; j++) padButtons[j].classList.remove("pressed");
+  }
+
+  // On phones, try to go full screen and lock to landscape when the game
+  // starts. Android browsers allow this; iPhone Safari does not, which is fine.
+  function goFullscreenOnTouch(){
+    if (!root.classList.contains("touch")) return;
+    try {
+      if (!document.fullscreenElement && root.requestFullscreen){
+        var p = root.requestFullscreen({ navigationUI: "hide" });
+        if (p && p.then){
+          p.then(function(){
+            if (screen.orientation && screen.orientation.lock){
+              screen.orientation.lock("landscape").catch(function(){});
+            }
+          }).catch(function(){});
+        }
+      }
+    } catch(e) {}
+  }
+
+  var igniteShown = false;
+  function updateTouchUi(){
+    var ready = gameState === "playing" && !player.superMode && score >= 4;
+    if (ready !== igniteShown){
+      igniteShown = ready;
+      igniteBtn.classList.toggle("ready", ready);
+    }
+  }
+
   function startGame(){
     resetGame();
+    releaseAllKeys();
     overlay.hidden = true;
+    root.classList.remove("menu");
     canvas.focus();
+    goFullscreenOnTouch();
     startMusic();
     playStartLaugh();
   }
@@ -784,6 +1009,7 @@
     overlayText.textContent = text;
     overlayBtn.textContent = btnLabel;
     overlay.hidden = false;
+    root.classList.add("menu");
   }
 
   // ---------- Render ----------
@@ -1115,12 +1341,14 @@
 
     update(dt);
     render();
+    updateTouchUi();
 
     requestAnimationFrame(frame);
   }
 
   resetGame();
   gameState = "start";
+  root.classList.add("menu");
   render();
   requestAnimationFrame(frame);
 })();
