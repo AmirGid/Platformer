@@ -1,6 +1,15 @@
 # Demonic Flame
 
-A browser-based HTML5 canvas platformer. Move through a moonlit forest overlooking a city, fight off imps, and manage your life flask before you reach the flag.
+A browser-based HTML5 canvas platformer. Move through a moonlit forest overlooking a city, fight off imps, and manage your life flask as you push east through connected stages.
+
+## Stages
+
+Stages sit side by side, metroidvania style: walk off the right edge of a stage to enter the next one, or off the left edge to go back. Imps you've killed stay dead when you return. Walk off the right edge of the last stage to win.
+
+1. **Moonlit Ridge**: solid ground and scattered rock ledges.
+2. **Ember Hollow**: lava pits in the ground (falling in costs one flask hit and sends you back to the stage entrance), a high staircase route and more, faster imps.
+
+Stages are defined in the `STAGES` list in `index.html`; add another entry to add a stage.
 
 ## Running it
 
@@ -22,6 +31,7 @@ No build step — it's a static page. Either:
 - **Space** — attack
 - **X** — once you've defeated 4+ imps, ignite into the fire-elemental form for 15 seconds (moves much faster, and simply touching an enemy kills it instantly with no damage taken). When the timer runs out you revert to normal and the imp counter resets to 0.
 - **R** — restart after game over or a win
+- **Phones / tablets** — on-screen buttons appear automatically on touch screens
 
 ## Project structure
 
