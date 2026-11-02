@@ -388,7 +388,7 @@
 <div class="wrap">
   <div class="masthead">
     <h1>DEMONIC <span class="accent">FLAME</span></h1>
-    <p class="tagline">Run the ridge, cross the Ember Hollow, and escape east before your flask runs dry.</p>
+    <p class="tagline">Run the ridge, cross the Ember Hollow, then drop into the Molten Core to face the Magma Golem.</p>
   </div>
 
   <div class="cabinet">
@@ -487,6 +487,40 @@
     bgReady = true;
   };
   bgImg.src = "assets/background.jpg";
+
+  // Stage 3 backdrop (volcanic cavern). Stages pick a backdrop by key.
+  var BACKDROPS = { forest: { img: bgImg } };
+  (function(){
+    var im = new Image();
+    var entry = { img: im, ready: false, w: 0, h: 0 };
+    im.onload = function(){
+      var scale = (VH * 1.18) / im.height;
+      entry.w = im.width * scale; entry.h = im.height * scale; entry.ready = true;
+    };
+    im.src = "assets/stage3_background.jpg";
+    BACKDROPS.cavern = entry;
+  })();
+
+  // Magma Golem boss sprites. All poses face RIGHT natively. anchor = [x of the
+  // body centre, height] in source pixels, so frames line up at the feet.
+  var BOSS_SCALE = 0.6;
+  var BOSS_SPRITES = {};
+  (function(){
+    var anchors = {
+      walk0:[213,320], walk1:[253,321], walk2:[244,333], idle:[180,307], jump:[123,328],
+      slam:[145,285], throw:[193,304], smoke:[185,308], roar:[206,313], breath:[181,293],
+      hover0:[134,392], hover1:[154,357],
+      die0:[110,335], die1:[99,331], die2:[115,327], die3:[72,251]
+    };
+    Object.keys(anchors).forEach(function(key){
+      var im = new Image();
+      im.ready = false;
+      im.onload = function(){ im.ready = true; };
+      im.src = "assets/boss_" + key + ".png";
+      im.anchorX = anchors[key][0];
+      BOSS_SPRITES[key] = im;
+    });
+  })();
 
   // Imp enemy sprites (native art faces LEFT; flip when moving right).
   var IMP_SPRITES = {};
@@ -612,8 +646,11 @@
   function rect(x,y,w,h){ return {x:x,y:y,w:w,h:h}; }
 
   // ---------- Stages ----------
-  // Stages sit side by side: walk off the right edge to go to the next one,
-  // off the left edge to go back. Imps you kill stay dead when you return.
+  // Stages are linked by their exits. Imps you kill stay dead when you return.
+  //   exits:   { left: stageIndex, right: stageIndex } walking off that edge
+  //            goes to that stage. No exit on a side = a wall.
+  //   dropPit: { pit: n, to: stageIndex } the n-th gap in the ground (0 =
+  //            first) is a shaft down to another stage instead of lava.
   //   ground:  [startX, endX] solid ground pieces; the space between two
   //            pieces is a lava pit (falling in costs one flask hit).
   //   enemies: [spawnX, patrolLeft, patrolRight, speed, spawnY]. Without
@@ -621,10 +658,13 @@
   //            below; with it, the imp starts standing at that height
   //            (ground = 444, a platform at y = y - 26).
   //   tint:    optional colour washed over the backdrop.
+  //   backdrop: "forest" (default) or "cavern".
+  //   boss:    true = the Magma Golem lives here; beating it wins the game.
   // Jump limits for laying out platforms: about 140px up, 170px across.
   var STAGES = [
     {
       name: "Moonlit Ridge",
+      exits: { right: 1 },
       width: 2500,
       ground: [[0, 2500]],
       platforms: [
@@ -640,6 +680,8 @@
     },
     {
       name: "Ember Hollow",
+      exits: { left: 0 },
+      dropPit: { pit: 2, to: 2 },   // the last pit (1900-2010) drops into the Molten Core
       width: 2800,
       tint: "rgba(120,28,8,0.22)",
       ground: [[0, 620], [720, 1250], [1360, 1900], [2010, 2800]],
@@ -661,6 +703,19 @@
         [2340, 2285, 2435, 1.0, 274],  // platform above the last stretch
         [2600, 2300, 2790, 1.7, 444]   // fast guard at the far end
       ]
+    },
+    {
+      name: "Molten Core",
+      exits: {},
+      backdrop: "cavern",
+      boss: true,
+      entryTopX: 160,               // where you land after dropping in
+      width: 1300,
+      ground: [[0, 1300]],
+      platforms: [
+        [200, 350, 150], [575, 280, 150], [950, 350, 150]   // ledges for dodging
+      ],
+      enemies: []
     }
   ];
 
@@ -698,6 +753,7 @@
 
   var player, enemies, camX, score, gameState, shake, timeAlive;
   var explosionParticles, explosionFlash;
+  var boss = null, fireballs = [], shockwaves = [];
 
   function resetGame(){
     player = {
@@ -707,8 +763,14 @@
       superMode:false, superTimer:0
     };
     stageState = STAGES.map(function(s){
-      return { enemies: s.enemies.map(function(e){ return makeEnemy(e[0],e[1],e[2],e[3],e[4]); }) };
+      return {
+        enemies: s.enemies.map(function(e){ return makeEnemy(e[0],e[1],e[2],e[3],e[4]); }),
+        boss: s.boss ? makeBoss(s.width) : null
+      };
     });
+    boss = null;
+    fireballs = [];
+    shockwaves = [];
     score = 0;
     shake = 0;
     timeAlive = 0;
@@ -728,12 +790,20 @@
     WORLD_W = stage.width;
     allPlatforms = buildPlatforms(stage);
     enemies = stageState[index].enemies;
+    boss = stageState[index].boss;
+    fireballs = [];
+    shockwaves = [];
     explosionParticles = [];
     explosionFlash = null;
 
     player.vy = 0;
     player.y = GROUND_Y - player.h;
-    if (from === "right"){
+    if (from === "top"){
+      // dropped down a shaft: fall in from above the screen
+      player.x = stage.entryTopX || 120;
+      player.y = -player.h - 20;
+      player.facing = 1;
+    } else if (from === "right"){
       player.x = WORLD_W - player.w - 40;
       player.facing = -1;
     } else {
@@ -996,21 +1066,29 @@
 
     moveAndCollide(player, allPlatforms);
 
-    // Walking off an edge moves to the next / previous stage. Walking off
-    // the right edge of the last stage wins the game.
-    if (player.x + player.w >= WORLD_W && player.vx > 0){
-      if (stageIndex < STAGES.length - 1){ loadStage(stageIndex + 1, "left"); return; }
-      gameState = "win";
-      var lifePct = Math.round((player.hp / player.maxHp) * 100);
-      showOverlay("YOU ESCAPED!", "You made it through the " + STAGES[stageIndex].name + " with " + score + " imp" + (score===1?"":"s") + " defeated and " + lifePct + "% of your flask still full.", "Play Again");
+    // Walking off an edge that has an exit moves to that stage.
+    var exits = STAGES[stageIndex].exits || {};
+    if (player.x + player.w >= WORLD_W && player.vx > 0 && exits.right !== undefined){
+      loadStage(exits.right, "left");
       return;
     }
-    if (player.x <= 0 && player.vx < 0 && stageIndex > 0){
-      loadStage(stageIndex - 1, "right");
+    if (player.x <= 0 && player.vx < 0 && exits.left !== undefined){
+      loadStage(exits.left, "right");
       return;
     }
     if (player.x < 0) player.x = 0;
     if (player.x + player.w > WORLD_W) player.x = WORLD_W - player.w;
+
+    // Fell down the shaft pit: drop into the stage below.
+    var drop = STAGES[stageIndex].dropPit;
+    if (drop && player.y > VH + 40){
+      var shaft = stagePits(STAGES[stageIndex])[drop.pit];
+      var midX = player.x + player.w/2;
+      if (midX >= shaft[0] - 10 && midX <= shaft[1] + 10){
+        loadStage(drop.to, "top");
+        return;
+      }
+    }
 
     // Fell into a lava pit: lose one flask hit and go back to where you
     // entered this stage.
@@ -1102,9 +1180,350 @@
       }
     }
 
+    if (boss && gameState === "playing") updateBoss(dt, hitbox);
+
     var targetCam = player.x + player.w/2 - VW/2;
     targetCam = Math.max(0, Math.min(WORLD_W - VW, targetCam));
     camX += (targetCam - camX) * Math.min(1, 0.18*dt);
+  }
+
+  // Shared "player got hit" handling for the boss and its attacks.
+  function hurtPlayer(fromX, deathText){
+    if (player.invuln > 0 || player.superMode) return;
+    player.hp -= 1;
+    player.invuln = 65;
+    shake = 12;
+    player.vy = -7;
+    player.x += (player.x + player.w/2 < fromX ? -1 : 1) * 18;
+    player.x = Math.max(0, Math.min(WORLD_W - player.w, player.x));
+    if (player.hp <= 0){
+      player.hp = 0;
+      gameState = "gameover";
+      showOverlay("YOU DIED", deathText + " Score: " + score + " · Time: " + Math.floor(timeAlive/60) + "s", "Try Again");
+    }
+  }
+
+  // ---------- Boss: the Magma Golem ----------
+  // A simple state machine. It waits until you land, roars, then walks toward
+  // you and picks one of three attacks, resting briefly after each one (the
+  // best moment to hit it):
+  //   throw  - hurls a fireball at you (3 at once below half health).
+  //            Your attack can swat fireballs out of the air.
+  //   slam   - leaps at you; landing sends shockwaves both ways (jump them).
+  //   breath - short-range flame cone angled at the ground in front of it.
+  // Touching it hurts. In fire form you take no damage and touching it hurts
+  // the golem instead.
+  var BOSS_HP = 14;
+  var BOSS_NAME = "MAGMA GOLEM";
+
+  function makeBoss(stageWidth){
+    return {
+      x: stageWidth - 260, y: GROUND_Y, vx: 0, vy: 0,
+      w: 96, h: 160, facing: -1,
+      hp: BOSS_HP, maxHp: BOSS_HP, phase2: false,
+      state: "waiting", t: 0, anim: 0, nextAttackIn: 80, fired: false,
+      hitFlash: 0, invuln: 0, dead_t: 0
+    };
+  }
+
+  function bossBox(b){ return rect(b.x - b.w/2, b.y - b.h, b.w, b.h); }
+
+  // Mouth position and breath cone, shared by update and draw.
+  function bossMouth(b){ return { x: b.x + b.facing * 30, y: b.y - 134 }; }
+  var BREATH_LEN = 290;
+  function inBreath(b, box){
+    var m = bossMouth(b);
+    var dx = (box.x + box.w/2 - m.x) * b.facing;
+    if (dx < 10 || dx > BREATH_LEN) return false;
+    var cy = m.y + dx * 0.45, hh = 14 + dx * 0.13;
+    return box.y < cy + hh && box.y + box.h > cy - hh;
+  }
+
+  function setBossState(b, s){ b.state = s; b.t = 0; b.fired = false; }
+
+  function damageBoss(b, amount, invuln){
+    b.hp -= amount;
+    b.invuln = invuln;
+    b.hitFlash = 10;
+    shake = Math.max(shake, 6);
+    if (!b.phase2 && b.hp <= b.maxHp / 2) b.phase2 = true;
+    if (b.hp <= 0){
+      b.hp = 0;
+      setBossState(b, "dead");
+      shake = 26;
+      fireballs = [];
+      shockwaves = [];
+      bossBurst(b, 30, 4);
+    }
+  }
+
+  // Lava and rock spray from the golem's chest.
+  function bossBurst(b, count, power){
+    explosionFlash = { x: b.x, y: b.y - b.h/2, t: 0, maxT: 30 };
+    for (var i = 0; i < count; i++){
+      var ang = Math.random() * Math.PI * 2, sp = 2 + Math.random() * power;
+      explosionParticles.push({
+        x: b.x, y: b.y - b.h/2, vx: Math.cos(ang)*sp, vy: Math.sin(ang)*sp - 2,
+        life: 40 + Math.random()*40, maxLife: 80, size: 2 + Math.random()*4,
+        color: ["255,200,80", "255,110,30", "70,50,45"][i % 3]
+      });
+    }
+  }
+
+  // Death animation: crack (die0) -> crumble (die1) -> explode (die2) -> rubble (die3).
+  var DIE_FRAMES = [28, 58, 96];
+
+  function spawnFireball(b, angleOffset){
+    var hand = { x: b.x + b.facing * 107, y: b.y - 98 };
+    var tx = player.x + player.w/2, ty = player.y + player.h/2;
+    var ang = Math.atan2(ty - hand.y, tx - hand.x) + angleOffset;
+    var sp = 5.2 * (b.phase2 ? 1.25 : 1);
+    fireballs.push({ x: hand.x, y: hand.y, vx: Math.cos(ang)*sp, vy: Math.sin(ang)*sp, r: 17, t: 0 });
+  }
+
+  function updateBoss(dt, hitbox){
+    var b = boss;
+    b.anim += dt;
+    if (b.hitFlash > 0) b.hitFlash -= dt;
+    if (b.invuln > 0) b.invuln -= dt;
+
+    if (b.state === "dead"){
+      var before = b.dead_t;
+      b.dead_t += dt;
+      if (before < DIE_FRAMES[0] && b.dead_t >= DIE_FRAMES[0]) shake = Math.max(shake, 12);
+      if (before < DIE_FRAMES[1] && b.dead_t >= DIE_FRAMES[1]){ shake = 30; bossBurst(b, 80, 8); }
+      if (before < DIE_FRAMES[2] && b.dead_t >= DIE_FRAMES[2]) shake = Math.max(shake, 10);
+      if (b.dead_t > 200 && gameState === "playing"){
+        gameState = "win";
+        var lifePct = Math.round((player.hp / player.maxHp) * 100);
+        showOverlay("THE GOLEM FALLS!", "You shattered the Magma Golem with " + score + " imp" + (score===1?"":"s") + " defeated and " + lifePct + "% of your flask still full.", "Play Again");
+      }
+      return;
+    }
+
+    var mul = b.phase2 ? 1.35 : 1;
+    var pcx = player.x + player.w/2;
+    var dist = pcx - b.x;
+    var canTurn = b.state === "walk" || b.state === "rest" || b.state === "intro" ||
+                  (b.state === "throw" && b.t < 20) || (b.state === "slam" && b.t < 10);
+    if (canTurn && Math.abs(dist) > 20) b.facing = dist > 0 ? 1 : -1;
+
+    b.t += dt;
+    switch (b.state){
+      case "waiting":
+        if (player.onGround){ setBossState(b, "intro"); shake = 10; }
+        break;
+      case "intro":
+        if (b.t > 110) { setBossState(b, "walk"); b.nextAttackIn = 60; }
+        break;
+      case "walk":
+        if (Math.abs(dist) > 70) b.x += (dist > 0 ? 1 : -1) * 1.2 * mul * dt;
+        if (b.t > b.nextAttackIn){
+          var d = Math.abs(dist), r = Math.random();
+          if (d < 240) setBossState(b, r < 0.6 ? "breath" : "slam");
+          else if (d > 430) setBossState(b, r < 0.7 ? "throw" : "slam");
+          else setBossState(b, r < 0.5 ? "throw" : "slam");
+        }
+        break;
+      case "throw":
+        if (b.t >= 28 && !b.fired){
+          b.fired = true;
+          if (b.phase2){ spawnFireball(b, -0.2); spawnFireball(b, 0); spawnFireball(b, 0.2); }
+          else spawnFireball(b, 0);
+        }
+        if (b.t > 62) setBossState(b, "rest");
+        break;
+      case "slam":   // crouch, then leap toward where the player is
+        if (b.t >= 22){
+          var air = 2 * 13.5 / GRAVITY;
+          b.vy = -13.5;
+          b.vx = Math.max(-9, Math.min(9, (pcx - b.x) / air));
+          setBossState(b, "air");
+        }
+        break;
+      case "air":
+        b.vy += GRAVITY * dt;
+        b.x += b.vx * dt;
+        b.y += b.vy * dt;
+        if (b.y >= GROUND_Y && b.vy > 0){
+          b.y = GROUND_Y; b.vy = 0; b.vx = 0;
+          setBossState(b, "land");
+          shake = 18;
+          shockwaves.push({ x: b.x - 40, dir: -1, t: 0 }, { x: b.x + 40, dir: 1, t: 0 });
+        }
+        break;
+      case "land":
+        if (b.t > 34) setBossState(b, "rest");
+        break;
+      case "breath":  // 30 frames wind-up, then 70 frames of flame
+        if (b.t >= 30 && b.t <= 100 && inBreath(b, player))
+          hurtPlayer(b.x, "The Magma Golem burned you to ash.");
+        if (b.t > 100) setBossState(b, "rest");
+        break;
+      case "rest":
+        if (b.t > (b.phase2 ? 28 : 55)){ setBossState(b, "walk"); b.nextAttackIn = (50 + Math.random()*60) / mul; }
+        break;
+    }
+    b.x = Math.max(70, Math.min(WORLD_W - 70, b.x));
+
+    // getting hit
+    var box = bossBox(b);
+    if (b.state !== "waiting" && b.invuln <= 0){
+      if (hitbox && intersects(hitbox, box)) damageBoss(b, 1, 22);
+      else if (player.superMode && intersects(player, box)) damageBoss(b, 1, 40);
+    }
+    if (b.state === "dead") return;
+    if (b.state !== "waiting" && intersects(player, box)) hurtPlayer(b.x, "The Magma Golem crushed you.");
+
+    // fireballs
+    for (var i = fireballs.length - 1; i >= 0; i--){
+      var f = fireballs[i];
+      f.t += dt; f.x += f.vx * dt; f.y += f.vy * dt;
+      var fb = rect(f.x - f.r, f.y - f.r, f.r*2, f.r*2);
+      var gone = f.x < -40 || f.x > WORLD_W + 40 || f.y > GROUND_Y || f.t > 400;
+      if (!gone && hitbox && intersects(hitbox, fb)){ gone = true; shake = Math.max(shake, 4); }
+      else if (!gone && intersects(player, fb)){ gone = true; hurtPlayer(f.x, "A fireball got you."); }
+      if (gone){
+        for (var k = 0; k < 10; k++){
+          explosionParticles.push({ x: f.x, y: Math.min(f.y, GROUND_Y - 4), vx: (Math.random()-0.5)*4, vy: -Math.random()*3,
+            life: 18 + Math.random()*12, maxLife: 30, size: 1.5 + Math.random()*2, color: "255,170,60" });
+        }
+        fireballs.splice(i, 1);
+      }
+    }
+
+    // ground shockwaves
+    for (var j = shockwaves.length - 1; j >= 0; j--){
+      var s = shockwaves[j];
+      s.t += dt; s.x += s.dir * 6.5 * mul * dt;
+      if (intersects(player, rect(s.x - 16, GROUND_Y - 34, 32, 34))) hurtPlayer(s.x, "The golem's shockwave got you.");
+      if (s.x < -40 || s.x > WORLD_W + 40) shockwaves.splice(j, 1);
+    }
+  }
+
+  function bossPose(b){
+    switch (b.state){
+      case "waiting": return "idle";
+      case "intro": return "roar";
+      case "walk": return ["walk0","walk1","walk2","walk1"][Math.floor(b.anim * 0.09) % 4];
+      case "throw": return b.t < 22 ? "idle" : "throw";
+      case "slam": return "smoke";
+      case "air": return b.vy < 0 ? "jump" : (Math.floor(b.anim*0.15) % 2 ? "hover0" : "hover1");
+      case "land": return "slam";
+      case "breath": return b.t < 30 ? "smoke" : "breath";
+      case "dead": return b.dead_t < DIE_FRAMES[0] ? "die0" : b.dead_t < DIE_FRAMES[1] ? "die1" : b.dead_t < DIE_FRAMES[2] ? "die2" : "die3";
+      default: return "idle";
+    }
+  }
+
+  function drawBoss(){
+    var b = boss;
+    if (!b) return;
+    var img = BOSS_SPRITES[bossPose(b)];
+    var sx = b.x - camX;
+    ctx.save();
+    // fiery aura in phase 2
+    if (b.phase2 && b.state !== "dead"){
+      var ag = ctx.createRadialGradient(sx, b.y - 90, 10, sx, b.y - 90, 150);
+      ag.addColorStop(0, "rgba(255,120,30,0.28)");
+      ag.addColorStop(1, "rgba(255,80,20,0)");
+      ctx.fillStyle = ag;
+      ctx.fillRect(sx - 150, b.y - 240, 300, 260);
+    }
+    // ground shadow
+    var air = Math.max(0, GROUND_Y - b.y);
+    ctx.fillStyle = "rgba(0,0,0," + Math.max(0.15, 0.5 - air/400).toFixed(2) + ")";
+    ctx.beginPath();
+    ctx.ellipse(sx, GROUND_Y + 2, 70 - Math.min(40, air/6), 9, 0, 0, Math.PI*2);
+    ctx.fill();
+    if (img && img.ready){
+      var S = BOSS_SCALE;
+      var shudder = b.state === "dead" && b.dead_t < DIE_FRAMES[2] ? (Math.random()-0.5)*5 : 0;
+      ctx.translate(sx + shudder, b.y);
+      if (b.facing < 0) ctx.scale(-1, 1);
+      if (b.hitFlash > 0) ctx.filter = "brightness(2.2) saturate(0.6)";
+      ctx.drawImage(img, -img.anchorX * S, -img.naturalHeight * S, img.naturalWidth * S, img.naturalHeight * S);
+    } else {
+      ctx.fillStyle = "#3a1a10";
+      ctx.fillRect(sx - b.w/2, b.y - b.h, b.w, b.h);
+    }
+    ctx.restore();
+
+    if (b.state === "breath" && b.t >= 30 && b.t <= 100) drawBreath(b);
+  }
+
+  function drawBreath(b){
+    var m = bossMouth(b);
+    var grow = Math.min(1, (b.t - 30) / 10) * Math.min(1, (100 - b.t) / 10 + 0.2);
+    var len = BREATH_LEN * grow;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (var i = 0; i < 26; i++){
+      var dx = (i / 26) * len + Math.random() * 10;
+      var cx = m.x + b.facing * dx - camX, cy = m.y + dx * 0.45 + (Math.random()-0.5) * dx * 0.12;
+      var r = 8 + dx * 0.13;
+      var g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      var heat = 1 - dx / BREATH_LEN;
+      g.addColorStop(0, "rgba(255," + Math.round(200 + 55*heat) + "," + Math.round(120*heat) + ",0.55)");
+      g.addColorStop(1, "rgba(255,80,10,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawBossAttacks(){
+    for (var i = 0; i < fireballs.length; i++){
+      var f = fireballs[i], fx = f.x - camX;
+      // tail
+      for (var k = 1; k <= 5; k++){
+        var tx = fx - f.vx * k * 2.2, ty = f.y - f.vy * k * 2.2;
+        ctx.fillStyle = "rgba(255," + (150 - k*18) + ",40," + (0.35 - k*0.05).toFixed(2) + ")";
+        ctx.beginPath(); ctx.arc(tx, ty, f.r * (1 - k*0.13), 0, Math.PI*2); ctx.fill();
+      }
+      var g = ctx.createRadialGradient(fx, f.y, 2, fx, f.y, f.r * 1.6);
+      g.addColorStop(0, "rgba(255,250,200,1)");
+      g.addColorStop(0.4, "rgba(255,190,60,0.95)");
+      g.addColorStop(1, "rgba(255,80,20,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(fx, f.y, f.r * 1.6, 0, Math.PI*2); ctx.fill();
+    }
+    for (var j = 0; j < shockwaves.length; j++){
+      var s = shockwaves[j], sx = s.x - camX;
+      var flick = 0.8 + 0.2 * Math.sin(s.t * 0.9);
+      var g2 = ctx.createLinearGradient(0, GROUND_Y - 40, 0, GROUND_Y);
+      g2.addColorStop(0, "rgba(255,200,80,0)");
+      g2.addColorStop(0.5, "rgba(255,140,40," + (0.8*flick).toFixed(2) + ")");
+      g2.addColorStop(1, "rgba(255,230,140,0.95)");
+      ctx.fillStyle = g2;
+      ctx.beginPath();
+      ctx.moveTo(sx - 20, GROUND_Y);
+      ctx.quadraticCurveTo(sx - 6 * s.dir, GROUND_Y - 44 * flick, sx + 16 * s.dir, GROUND_Y);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  function drawBossBar(){
+    var b = boss;
+    if (!b || b.state === "waiting" || (b.state === "dead" && b.dead_t > 60)) return;
+    var w = 360, h = 12, x = VW/2 - w/2, y = 34;
+    ctx.save();
+    ctx.fillStyle = "rgba(10,6,8,0.6)";
+    roundRect(x - 10, y - 24, w + 20, h + 34, 10);
+    ctx.fill();
+    ctx.fillStyle = "#ffcf9e";
+    ctx.font = "10px 'Press Start 2P', monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(BOSS_NAME, VW/2, y - 8);
+    ctx.fillStyle = "#2a1210";
+    roundRect(x, y, w, h, 4); ctx.fill();
+    var pct = b.hp / b.maxHp;
+    var g = ctx.createLinearGradient(x, 0, x + w, 0);
+    g.addColorStop(0, "#ff4a1c"); g.addColorStop(1, "#ffb347");
+    ctx.fillStyle = g;
+    if (pct > 0){ roundRect(x + 1, y + 1, Math.max(4, (w - 2) * pct), h - 2, 3); ctx.fill(); }
+    ctx.restore();
   }
 
   function showOverlay(title, text, btnLabel){
@@ -1117,6 +1536,27 @@
 
   // ---------- Render ----------
   function drawBackground(){
+    var backdrop = STAGES[stageIndex].backdrop;
+    if (backdrop && backdrop !== "forest"){
+      var bd = BACKDROPS[backdrop];
+      if (bd && bd.ready){
+        var shift = WORLD_W - VW > 0 ? camX / (WORLD_W - VW) : 0;
+        ctx.drawImage(bd.img, -shift * Math.max(0, bd.w - VW), -(bd.h - VH) / 2, bd.w, bd.h);
+      } else {
+        ctx.fillStyle = "#2a0d06";
+        ctx.fillRect(0, 0, VW, VH);
+      }
+      // the cavern art is bright and busy: dim it so the golem, ledges and
+      // fireballs stand out against it
+      ctx.fillStyle = "rgba(22,8,10,0.52)";
+      ctx.fillRect(0, 0, VW, VH);
+      var vg2 = ctx.createLinearGradient(0, VH*0.5, 0, VH);
+      vg2.addColorStop(0, "rgba(8,4,4,0)");
+      vg2.addColorStop(1, "rgba(8,4,4,0.45)");
+      ctx.fillStyle = vg2;
+      ctx.fillRect(0,0,VW,VH);
+      return;
+    }
     if (!bgReady){
       // fallback while the artwork loads
       var g = ctx.createLinearGradient(0,0,0,VH);
@@ -1182,10 +1622,12 @@
   // Lava glowing up out of the gaps between ground pieces.
   function drawPits(){
     var pits = stagePits(STAGES[stageIndex]);
+    var drop = STAGES[stageIndex].dropPit;
     var pulse = 0.75 + 0.25 * Math.sin(timeAlive * 0.08);
     for (var i = 0; i < pits.length; i++){
       var sx = pits[i][0] - camX, w = pits[i][1] - pits[i][0];
       if (sx + w < 0 || sx > VW) continue;
+      if (drop && drop.pit === i){ drawShaft(sx, w); continue; }
       var g = ctx.createLinearGradient(0, GROUND_Y, 0, VH);
       g.addColorStop(0, "rgba(10,4,4,0.9)");
       g.addColorStop(0.55, "rgba(140,30,6," + (0.85*pulse).toFixed(2) + ")");
@@ -1213,6 +1655,37 @@
     }
   }
 
+  // The shaft pit: a dark drop with embers sinking into it and pulsing
+  // down-chevrons, so it reads as "a way down", not lava.
+  function drawShaft(sx, w){
+    var g = ctx.createLinearGradient(0, GROUND_Y, 0, VH);
+    g.addColorStop(0, "rgba(6,3,4,0.95)");
+    g.addColorStop(1, "rgba(0,0,0,1)");
+    ctx.fillStyle = g;
+    ctx.fillRect(sx, GROUND_Y, w, VH - GROUND_Y);
+    var hg = ctx.createRadialGradient(sx + w/2, GROUND_Y, 4, sx + w/2, GROUND_Y, w);
+    hg.addColorStop(0, "rgba(120,40,255,0.18)");
+    hg.addColorStop(1, "rgba(120,40,255,0)");
+    ctx.fillStyle = hg;
+    ctx.fillRect(sx - w/2, GROUND_Y - w, w*2, w + 70);
+    for (var e = 0; e < 5; e++){
+      var t = (timeAlive*0.4 + e*2.1) % 10;
+      var ex = sx + w*(0.15 + 0.17*e);
+      var ey = GROUND_Y - 60 + t*12;
+      var ea = Math.min(1, t/3) * Math.max(0, 1 - t/10);
+      ctx.fillStyle = "rgba(255,170,90," + (ea*0.8).toFixed(2) + ")";
+      ctx.beginPath(); ctx.arc(ex, ey, 1.6, 0, Math.PI*2); ctx.fill();
+    }
+    var bob = 4 * Math.sin(timeAlive * 0.1);
+    ctx.strokeStyle = "rgba(255,210,170," + (0.45 + 0.35*pulseOf(timeAlive)).toFixed(2) + ")";
+    ctx.lineWidth = 3;
+    for (var c = 0; c < 2; c++){
+      var cy = GROUND_Y - 70 + c*14 + bob, cx = sx + w/2;
+      ctx.beginPath(); ctx.moveTo(cx - 12, cy); ctx.lineTo(cx, cy + 10); ctx.lineTo(cx + 12, cy); ctx.stroke();
+    }
+  }
+  function pulseOf(t){ return 0.5 + 0.5 * Math.sin(t * 0.1); }
+
   // A soft ember glow and arrow at any edge that leads to another stage.
   function drawExitHints(){
     var pulse = 0.5 + 0.5 * Math.sin(timeAlive * 0.1);
@@ -1231,8 +1704,9 @@
       ctx.fillText(dir > 0 ? "\u203A" : "\u2039", sx - dir * 26 + dir * 4 * pulse, gy + 8);
       ctx.textAlign = "left";
     }
-    if (stageIndex > 0) hint(0, -1);
-    hint(WORLD_W, 1);   // the last stage's right edge is the way out
+    var exits = STAGES[stageIndex].exits || {};
+    if (exits.left !== undefined) hint(0, -1);
+    if (exits.right !== undefined) hint(WORLD_W, 1);
   }
 
   function drawStageBanner(){
@@ -1486,7 +1960,9 @@
     allPlatforms.forEach(drawPlatform);
     drawExitHints();
     enemies.forEach(drawEnemy);
+    drawBoss();
     if (gameState !== "start") drawPlayer();
+    drawBossAttacks();
     drawExplosionFx();
     ctx.restore();
 
@@ -1494,6 +1970,7 @@
 
     if (gameState === "playing" || gameState === "win" || gameState === "gameover"){
       drawHUD();
+      drawBossBar();
     }
     if (gameState === "playing") drawStageBanner();
   }

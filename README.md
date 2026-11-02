@@ -4,10 +4,11 @@ A browser-based HTML5 canvas platformer. Move through a moonlit forest overlooki
 
 ## Stages
 
-Stages sit side by side, metroidvania style: walk off the right edge of a stage to enter the next one, or off the left edge to go back. Imps you've killed stay dead when you return. Walk off the right edge of the last stage to win.
+Stages are linked metroidvania style: walk off an edge or drop down a shaft to reach the next area. Imps you've killed stay dead when you return.
 
-1. **Moonlit Ridge**: solid ground and scattered rock ledges.
-2. **Ember Hollow**: lava pits in the ground (falling in costs one flask hit and sends you back to the stage entrance), a high staircase route and more, faster imps.
+1. **Moonlit Ridge**: solid ground and scattered rock ledges. Exit east to Ember Hollow.
+2. **Ember Hollow**: lava pits in the ground (falling in costs one flask hit and sends you back to the stage entrance), a high staircase route and more, faster imps. The last pit is a dark shaft instead of lava: drop into it to reach the Molten Core.
+3. **Molten Core**: a volcanic cavern arena with the **Magma Golem** boss (14 hits). It throws fireballs (swat them with your attack), leaps at you and sends ground shockwaves (jump them), and breathes a short flame cone. Below half health it speeds up and throws three fireballs at once. Beat it to win. In fire form you take no damage and touching the golem hurts it.
 
 Stages are defined in the `STAGES` list in `index.html`; add another entry to add a stage.
 
@@ -48,6 +49,8 @@ assets/          all sprite sheets, art, and audio referenced by index.html
 | `player_*.png` | Base player (shadow-creature) animation states: walk, idle, jump, attack, hurt, death |
 | `fire_*.png` | Fire-elemental "ignited" form, same animation states, unlocked at 4+ kills |
 | `imp_*.png` | Enemy sprites |
+| `boss_*.png` | Magma Golem boss poses (walk, idle, roar, throw, jump, hover, slam, breath, smoke, plus the 4-frame death sequence die0–die3), cut from sprite sheets; all face right |
+| `stage3_background.jpg` | Molten Core cavern backdrop |
 | `rock.png` | Tiled platform/lava-rock art |
 | `flask_0.png`–`flask_4.png` | Life flask HUD, indexed by hits remaining (0 = empty, 4 = full) |
 | `torch_0.png`–`torch_5.png` | Imp-kill-count HUD torch, indexed by progressive ignition state (score 0 already shows the first ember) |
