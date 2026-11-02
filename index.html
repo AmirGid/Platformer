@@ -388,7 +388,7 @@
 <div class="wrap">
   <div class="masthead">
     <h1>DEMONIC <span class="accent">FLAME</span></h1>
-    <p class="tagline">Run the ridge, cross the Ember Hollow, then drop into the Molten Core to face the Magma Golem.</p>
+    <p class="tagline">Run the ridge, cross the Ember Hollow, drop into the Molten Core to face the Magma Golem, then climb the Frozen Spire.</p>
   </div>
 
   <div class="cabinet">
@@ -501,6 +501,26 @@
     BACKDROPS.cavern = entry;
   })();
 
+  // Frozen Spire backdrop: a tall portrait image that scrolls up as you climb.
+  (function(){
+    var im = new Image();
+    var entry = { img: im, ready: false, w: 0, h: 0 };
+    im.onload = function(){
+      var scale = 1060 / im.width;
+      entry.w = im.width * scale; entry.h = im.height * scale; entry.ready = true;
+    };
+    im.src = "assets/stage4_background.jpg";
+    BACKDROPS.frost = entry;
+  })();
+
+  // Ice ledge art. The snow surface sits ICE_TOP px below the image top
+  // (in source pixels), so ledges line up with their collision box.
+  var iceImg = new Image();
+  iceImg.ready = false;
+  iceImg.onload = function(){ iceImg.ready = true; };
+  iceImg.src = "assets/ice_platform.png";
+  var ICE_TOP = 7;
+
   // Magma Golem boss sprites. All poses face RIGHT natively. anchor = [x of the
   // body centre, height] in source pixels, so frames line up at the feet.
   var BOSS_SCALE = 0.6;
@@ -536,6 +556,26 @@
       im.onload = function(){ im.ready = true; };
       im.src = sources[key];
       IMP_SPRITES[key] = im;
+    });
+  })();
+
+  // Flying imp sprites (native art faces RIGHT). anchor = the glowing eyes,
+  // which stay put between wing flaps, in source pixels.
+  var FLYER_SCALE = 0.5;
+  var FLYER_SPRITES = {};
+  (function(){
+    var anchors = {
+      hover0:[98,44], hover1:[104,44], hover2:[95,43], hover3:[80,43],
+      dive0:[117,47], dive1:[108,59], dive2:[105,44], dive3:[121,46],
+      fly0:[113,46], fly1:[109,49], fly2:[101,56], fly3:[106,45]
+    };
+    Object.keys(anchors).forEach(function(key){
+      var im = new Image();
+      im.ready = false;
+      im.onload = function(){ im.ready = true; };
+      im.src = "assets/flyer_" + key + ".png";
+      im.ax = anchors[key][0]; im.ay = anchors[key][1];
+      FLYER_SPRITES[key] = im;
     });
   })();
 
@@ -657,9 +697,15 @@
   //            spawnY an imp drops from the sky and lands on whatever is
   //            below; with it, the imp starts standing at that height
   //            (ground = 444, a platform at y = y - 26).
+  //   flyers:  flying imps, each a loop of [x, y] spots it hovers at and
+  //            flies between. Gets close and it swoops at you.
   //   tint:    optional colour washed over the backdrop.
   //   backdrop: "forest" (default) or "cavern".
-  //   boss:    true = the Magma Golem lives here; beating it wins the game.
+  //   boss:    true = the Magma Golem lives here. Beating it freezes the
+  //            room into the Frozen Spire (see freezeArena).
+  //   topY:    tall stages: the highest y the camera scrolls up to.
+  //   ice:     draw ledges with the ice art. oneWay: ledges can be jumped
+  //            through from below and landed on from above.
   // Jump limits for laying out platforms: about 140px up, 170px across.
   var STAGES = [
     {
@@ -716,6 +762,54 @@
         [200, 350, 150], [575, 280, 150], [950, 350, 150]   // ledges for dodging
       ],
       enemies: []
+    },
+    {
+      // Not entered through an exit: the Molten Core turns into this stage
+      // once the golem is dead. Same floor and width, so the swap is seamless.
+      name: "Frozen Spire",
+      exits: {},
+      backdrop: "frost",
+      ice: true,
+      oneWay: true,
+      width: 1300,
+      topY: -2040,
+      summit: [480, -1900, 360],     // reach this ledge to win
+      ground: [[0, 1300]],
+      platforms: [
+        [200, 350, 150], [400, 380, 100], [575, 280, 150], [950, 350, 150],   // the old arena ledges
+        [380, 180, 130], [800, 190, 130],
+        [120, 90, 140], [1040, 90, 140],
+        [330, 0, 120], [820, -10, 120],
+        [560, -100, 170],
+        [300, -200, 120], [880, -200, 120],
+        [80, -300, 130], [1100, -300, 130],
+        [280, -400, 110], [960, -400, 110],
+        [540, -500, 280],
+        [300, -600, 120], [960, -610, 120],
+        [100, -700, 120], [1140, -700, 120],
+        [330, -800, 110], [880, -800, 110],
+        [600, -900, 140],
+        [380, -1000, 110], [840, -1010, 110],
+        [150, -1100, 120], [1060, -1100, 120],
+        [380, -1200, 90], [880, -1200, 90],
+        [600, -1300, 120],
+        [360, -1400, 100], [880, -1400, 100],
+        [120, -1500, 110], [1100, -1500, 110],
+        [320, -1600, 240], [900, -1600, 100],
+        [640, -1700, 120],
+        [420, -1800, 100], [880, -1800, 100],
+        [480, -1900, 360]
+      ],
+      enemies: [],
+      // hover spots sit ~70px above a ledge, so they float just over your head
+      flyers: [
+        [[445, 110], [865, 120]],
+        [[645, -170], [360, -270], [940, -270]],
+        [[680, -570], [360, -670], [1020, -680]],
+        [[670, -970], [435, -1070], [895, -1080]],
+        [[660, -1370], [410, -1470], [930, -1470]],
+        [[440, -1670], [700, -1770], [950, -1670]]
+      ]
     }
   ];
 
@@ -725,7 +819,11 @@
 
   function buildPlatforms(stage){
     var list = stage.ground.map(function(g){ return rect(g[0], GROUND_Y, g[1] - g[0], 70); });
-    stage.platforms.forEach(function(p){ list.push(rect(p[0], p[1], p[2], 22)); });
+    stage.platforms.forEach(function(p){
+      var r = rect(p[0], p[1], p[2], 22);
+      if (stage.oneWay) r.oneWay = true;
+      list.push(r);
+    });
     return list;
   }
 
@@ -743,6 +841,111 @@
              alive:true, hitFlash:0, walkCycle:Math.random()*10, dead_t:0 };
   }
 
+  // Flying imp. x/y/w/h is its hit box like a walking imp; cx/cy is its centre.
+  function makeFlyer(route, i){
+    var f = { flyer: true, route: route, leg: 0, state: "hover", t: -i * 23,
+              cx: route[0][0], cy: route[0][1], w: 34, h: 30, vx: 0, vy: 0,
+              facing: 1, anim: i * 1.7, swoopCd: 90, alive: true, hitFlash: 0, dead_t: 0, walkCycle: 0 };
+    f.x = f.cx - f.w/2; f.y = f.cy - f.h/2;
+    return f;
+  }
+
+  var FLYER_SPEED = 2.1, FLYER_SWOOP = 5.2, FLYER_SIGHT = 230;
+  function moveFlyerToward(f, tx, ty, speed, dt){
+    var dx = tx - f.cx, dy = ty - f.cy, d = Math.sqrt(dx*dx + dy*dy);
+    var step = speed * dt;
+    if (d <= step){ f.cx = tx; f.cy = ty; return true; }
+    f.cx += dx / d * step; f.cy += dy / d * step;
+    if (Math.abs(dx) > 1) f.facing = dx > 0 ? 1 : -1;
+    return false;
+  }
+
+  // hover over a ledge -> fly an arc to the next spot -> repeat; if the
+  // player comes close: pull back briefly (a tell), swoop, fly home.
+  function updateFlyer(f, dt){
+    f.anim += dt;
+    f.t += dt;
+    if (f.swoopCd > 0) f.swoopCd -= dt;
+    var pcx = player.x + player.w/2, pcy = player.y + player.h/2;
+    var pdx = pcx - f.cx, pdy = pcy - f.cy;
+    var near = pdx*pdx + pdy*pdy < FLYER_SIGHT * FLYER_SIGHT;
+    var home = f.route[f.leg];
+    if (f.state === "hover"){
+      f.cx += (home[0] - f.cx) * Math.min(1, 0.1 * dt);
+      f.cy = home[1] + Math.sin(f.anim * 0.08) * 7;
+      f.facing = pdx > 0 ? 1 : -1;
+      if (near && f.swoopCd <= 0 && gameState === "playing"){
+        f.state = "windup"; f.t = 0;
+      } else if (f.t > 110){
+        f.state = "fly"; f.t = 0;
+        f.from = [f.cx, f.cy];
+        f.leg = (f.leg + 1) % f.route.length;
+        var to = f.route[f.leg];
+        f.flyLen = Math.max(20, Math.sqrt(Math.pow(to[0]-f.cx, 2) + Math.pow(to[1]-f.cy, 2)) / FLYER_SPEED);
+      }
+    } else if (f.state === "fly"){
+      var to2 = f.route[f.leg];
+      var k = Math.min(1, f.t / f.flyLen);
+      var e = k * k * (3 - 2 * k);
+      f.cx = f.from[0] + (to2[0] - f.from[0]) * e;
+      f.cy = f.from[1] + (to2[1] - f.from[1]) * e - Math.sin(Math.PI * k) * 40;
+      f.facing = to2[0] >= f.from[0] ? 1 : -1;
+      if (k >= 1){ f.state = "hover"; f.t = 0; }
+      else if (near && f.swoopCd <= 0 && k > 0.2 && gameState === "playing"){ f.state = "windup"; f.t = 0; }
+    } else if (f.state === "windup"){
+      f.facing = pdx > 0 ? 1 : -1;
+      f.cx -= f.facing * 0.9 * dt;
+      f.cy -= 0.6 * dt;
+      if (f.t > 20){ f.state = "swoop"; f.t = 0; f.target = [pcx, pcy]; }
+    } else if (f.state === "swoop"){
+      if (moveFlyerToward(f, f.target[0], f.target[1], FLYER_SWOOP, dt) || f.t > 60){
+        f.state = "return"; f.t = 0; f.swoopCd = 150;
+      }
+    } else if (f.state === "return"){
+      if (moveFlyerToward(f, home[0], home[1], FLYER_SPEED * 1.3, dt)){ f.state = "hover"; f.t = 0; }
+    }
+    f.vx = f.facing;     // drawing and knockback read vx for direction
+    f.x = f.cx - f.w/2; f.y = f.cy - f.h/2;
+  }
+
+  // Double jump: a burst of frost under the feet.
+  function doubleJumpPuff(){
+    var cx = player.x + player.w/2, fy = player.y + player.h;
+    for (var i = 0; i < 16; i++){
+      var ang = Math.PI * (0.15 + 0.7 * Math.random());   // mostly downward
+      var sp = 1.5 + Math.random() * 2.5;
+      explosionParticles.push({
+        x: cx, y: fy, vx: Math.cos(ang) * sp * (Math.random() < 0.5 ? -1 : 1), vy: Math.sin(ang) * sp,
+        life: 18 + Math.random() * 14, maxLife: 32, size: 1.5 + Math.random() * 2.5,
+        color: Math.random() < 0.5 ? "220,245,255" : "140,210,255"
+      });
+    }
+  }
+
+  // "Ability unlocked" message under the stage banner.
+  var abilityToastT = 0, ABILITY_TOAST_TIME = 240;
+  function drawAbilityToast(){
+    if (abilityToastT <= 0) return;
+    var t = abilityToastT / ABILITY_TOAST_TIME;
+    var a = Math.max(0, Math.min(1, t * 5, (1 - t) * 8));
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#9fe4ff";
+    ctx.font = "11px 'Press Start 2P', monospace";
+    ctx.fillText("NEW ABILITY", VW/2, 196);
+    ctx.fillStyle = "#eafaff";
+    ctx.shadowColor = "rgba(80,190,255,0.9)";
+    ctx.shadowBlur = 14;
+    ctx.font = "20px 'Press Start 2P', monospace";
+    ctx.fillText("DOUBLE JUMP", VW/2, 228);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#cfe9f5";
+    ctx.font = "10px 'Press Start 2P', monospace";
+    ctx.fillText("PRESS JUMP AGAIN IN MID-AIR", VW/2, 254);
+    ctx.restore();
+  }
+
   // ---------- Player ----------
   var GRAVITY = 0.62;
   var MOVE_SPEED = 4.2;
@@ -751,20 +954,24 @@
   var JUMP_V = -13.2;
   var MAX_FALL = 16;
 
-  var player, enemies, camX, score, gameState, shake, timeAlive;
+  var player, enemies, camX, camY = 0, score, gameState, shake, timeAlive;
   var explosionParticles, explosionFlash;
   var boss = null, fireballs = [], shockwaves = [];
+  var freezeT = 0;   // 0..1 progress of the fire-to-frost change after the golem dies
 
   function resetGame(){
     player = {
       x: 60, y: GROUND_Y - 46, w: 30, h: 46, vx:0, vy:0,
       facing: 1, onGround:false, hp: 4, maxHp:4,
       invuln:0, attackT:0, attackCd:0, walkCycle:0,
-      superMode:false, superTimer:0
+      superMode:false, superTimer:0,
+      canDoubleJump:false, airJumpUsed:false, upHeld:false
     };
+    abilityToastT = 0;
     stageState = STAGES.map(function(s){
       return {
-        enemies: s.enemies.map(function(e){ return makeEnemy(e[0],e[1],e[2],e[3],e[4]); }),
+        enemies: s.enemies.map(function(e){ return makeEnemy(e[0],e[1],e[2],e[3],e[4]); })
+                   .concat((s.flyers || []).map(function(route, i){ return makeFlyer(route, i); })),
         boss: s.boss ? makeBoss(s.width) : null
       };
     });
@@ -776,6 +983,7 @@
     timeAlive = 0;
     explosionParticles = [];
     explosionFlash = null;
+    freezeT = 0;
     loadStage(0, "left");
     gameState = "playing";
   }
@@ -812,6 +1020,7 @@
     }
     player.entryX = player.x;   // where to put the player back after a lava fall
     camX = Math.max(0, Math.min(WORLD_W - VW, player.x + player.w/2 - VW/2));
+    camY = 0;
     stageFade = index === 0 && from === "left" && timeAlive === 0 ? 0 : 1;
     stageBannerT = STAGE_BANNER_TIME;
   }
@@ -1025,7 +1234,7 @@
     e.x += e.vx;
     for (var i=0;i<platforms.length;i++){
       var p = platforms[i];
-      if (intersects(e,p)){
+      if (!p.oneWay && intersects(e,p)){
         if (e.vx > 0) e.x = p.x - e.w;
         else if (e.vx < 0) e.x = p.x + p.w;
       }
@@ -1034,7 +1243,12 @@
     e.onGround = false;
     for (var j=0;j<platforms.length;j++){
       var p2 = platforms[j];
-      if (intersects(e,p2)){
+      if (p2.oneWay){
+        // only catch things falling onto the top from above
+        if (e.vy > 0 && intersects(e,p2) && e.y + e.h - e.vy <= p2.y + 1){
+          e.y = p2.y - e.h; e.vy = 0; e.onGround = true;
+        }
+      } else if (intersects(e,p2)){
         if (e.vy > 0){ e.y = p2.y - e.h; e.vy = 0; e.onGround = true; }
         else if (e.vy < 0){ e.y = p2.y + p2.h; e.vy = 0; }
       }
@@ -1054,9 +1268,18 @@
     else if (right && !left){ player.vx = curSpeed; player.facing = 1; }
     else player.vx = 0;
 
+    // Ground jump fires while Up is held; the double jump (unlocked by
+    // beating the golem) needs a fresh press in mid-air.
+    var upPressed = keys.ArrowUp && !player.upHeld;
+    player.upHeld = !!keys.ArrowUp;
+    if (player.onGround) player.airJumpUsed = false;
     if (keys.ArrowUp && player.onGround){
       player.vy = JUMP_V;
       player.onGround = false;
+    } else if (upPressed && !player.onGround && player.canDoubleJump && !player.airJumpUsed){
+      player.vy = JUMP_V * 0.92;
+      player.airJumpUsed = true;
+      doubleJumpPuff();
     }
 
     player.vy += GRAVITY * dt;
@@ -1110,6 +1333,7 @@
     }
     if (stageFade > 0) stageFade = Math.max(0, stageFade - 0.04 * dt);
     if (stageBannerT > 0) stageBannerT -= dt;
+    if (abilityToastT > 0) abilityToastT -= dt;
 
     if (player.attackCd > 0) player.attackCd -= dt;
     if (player.attackT > 0) player.attackT -= dt;
@@ -1142,15 +1366,20 @@
       var en = enemies[i];
       if (!en.alive){
         en.dead_t += dt;
+        if (en.flyer){ en.vy += 0.5 * dt; en.cy += en.vy * dt; en.y = en.cy - en.h/2; }   // tumbles out of the air
         continue;
       }
-      en.walkCycle += 0.2 * dt;
-      if (en.x <= en.lo) en.vx = Math.abs(en.vx);
-      if (en.x + en.w >= en.hi) en.vx = -Math.abs(en.vx);
-      en.vy += GRAVITY * dt;
-      if (en.vy > MAX_FALL) en.vy = MAX_FALL;
-      moveAndCollide(en, allPlatforms);
-      if (en.y > VH + 40){ en.alive = false; en.dead_t = 99; continue; }  // fell into lava
+      if (en.flyer){
+        updateFlyer(en, dt);
+      } else {
+        en.walkCycle += 0.2 * dt;
+        if (en.x <= en.lo) en.vx = Math.abs(en.vx);
+        if (en.x + en.w >= en.hi) en.vx = -Math.abs(en.vx);
+        en.vy += GRAVITY * dt;
+        if (en.vy > MAX_FALL) en.vy = MAX_FALL;
+        moveAndCollide(en, allPlatforms);
+        if (en.y > VH + 40){ en.alive = false; en.dead_t = 99; continue; }  // fell into lava
+      }
 
       if (en.hitFlash > 0) en.hitFlash -= dt;
 
@@ -1185,6 +1414,37 @@
     var targetCam = player.x + player.w/2 - VW/2;
     targetCam = Math.max(0, Math.min(WORLD_W - VW, targetCam));
     camX += (targetCam - camX) * Math.min(1, 0.18*dt);
+    // tall stages scroll up with the player (keeps them a bit below centre)
+    var topY = STAGES[stageIndex].topY || 0;
+    var targetY = Math.max(topY, Math.min(0, player.y + player.h/2 - VH * 0.6));
+    camY += (targetY - camY) * Math.min(1, 0.12*dt);
+
+    // standing on the summit ledge of the Frozen Spire wins the game
+    var summit = STAGES[stageIndex].summit;
+    if (summit && player.onGround && Math.abs(player.y + player.h - summit[1]) < 2 &&
+        player.x + player.w > summit[0] && player.x < summit[0] + summit[2] && gameState === "playing"){
+      gameState = "win";
+      var lifePct = Math.round((player.hp / player.maxHp) * 100);
+      showOverlay("SUMMIT REACHED!", "You shattered the Magma Golem and climbed the Frozen Spire with " + lifePct + "% of your flask still full. Time: " + Math.floor(timeAlive/60) + "s", "Play Again");
+    }
+  }
+
+  // The golem's death cools the Molten Core into the bottom of the Frozen
+  // Spire: same floor, new ice ledges reaching up, the rubble stays put.
+  var FREEZE_START = 110, FREEZE_LEN = 170;   // frames after the golem's death
+  var FROST_STAGE = 3;
+  var frostPlatforms = null;
+  function freezeArena(){
+    var rubble = boss;
+    stageIndex = FROST_STAGE;
+    var stage = STAGES[FROST_STAGE];
+    WORLD_W = stage.width;
+    allPlatforms = buildPlatforms(stage);
+    enemies = stageState[FROST_STAGE].enemies;
+    stageState[FROST_STAGE].boss = rubble;
+    boss = rubble;
+    player.entryX = player.x;
+    stageBannerT = STAGE_BANNER_TIME;
   }
 
   // Shared "player got hit" handling for the boss and its attacks.
@@ -1250,6 +1510,8 @@
     if (b.hp <= 0){
       b.hp = 0;
       setBossState(b, "dead");
+      player.canDoubleJump = true;
+      abilityToastT = ABILITY_TOAST_TIME;
       shake = 26;
       fireballs = [];
       shockwaves = [];
@@ -1293,10 +1555,11 @@
       if (before < DIE_FRAMES[0] && b.dead_t >= DIE_FRAMES[0]) shake = Math.max(shake, 12);
       if (before < DIE_FRAMES[1] && b.dead_t >= DIE_FRAMES[1]){ shake = 30; bossBurst(b, 80, 8); }
       if (before < DIE_FRAMES[2] && b.dead_t >= DIE_FRAMES[2]) shake = Math.max(shake, 10);
-      if (b.dead_t > 200 && gameState === "playing"){
-        gameState = "win";
-        var lifePct = Math.round((player.hp / player.maxHp) * 100);
-        showOverlay("THE GOLEM FALLS!", "You shattered the Magma Golem with " + score + " imp" + (score===1?"":"s") + " defeated and " + lifePct + "% of your flask still full.", "Play Again");
+      if (b.dead_t > FREEZE_START){
+        var wasZero = freezeT === 0;
+        freezeT = Math.min(1, (b.dead_t - FREEZE_START) / FREEZE_LEN);
+        if (wasZero) shake = Math.max(shake, 8);
+        if (freezeT >= 1 && stageIndex !== FROST_STAGE) freezeArena();
       }
       return;
     }
@@ -1535,8 +1798,52 @@
   }
 
   // ---------- Render ----------
+  // Tall ice cave: scrolls sideways with camX and up with camY.
+  function drawFrostBackdrop(){
+    var bd = BACKDROPS.frost;
+    if (bd.ready){
+      var topY = STAGES[FROST_STAGE].topY;
+      var up = topY ? Math.max(0, Math.min(1, camY / topY)) : 0;   // 0 = floor, 1 = summit
+      var shiftX = WORLD_W - VW > 0 ? camX / (WORLD_W - VW) : 0;
+      ctx.drawImage(bd.img, -shiftX * Math.max(0, bd.w - VW), -(bd.h - VH) * (1 - up), bd.w, bd.h);
+    } else {
+      ctx.fillStyle = "#16324a";
+      ctx.fillRect(0, 0, VW, VH);
+    }
+    // the ice art is bright: cool it down so the player and ledges read
+    ctx.fillStyle = "rgba(6,18,36,0.48)";
+    ctx.fillRect(0, 0, VW, VH);
+    var vg = ctx.createLinearGradient(0, VH*0.55, 0, VH);
+    vg.addColorStop(0, "rgba(4,10,24,0)");
+    vg.addColorStop(1, "rgba(4,10,24,0.4)");
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, VW, VH);
+  }
+
+  // Jagged ring that the frost spreads out in, centred on the golem's rubble.
+  var FROST_EDGE = [];
+  for (var fe = 0; fe < 72; fe++) FROST_EDGE.push(0.88 + Math.random() * 0.24 * (fe % 2 ? 1 : 0.4));
+  function frostPath(cx, cy, r){
+    ctx.beginPath();
+    for (var i = 0; i < FROST_EDGE.length; i++){
+      var ang = i / FROST_EDGE.length * Math.PI * 2;
+      var rr = r * FROST_EDGE[i];
+      if (i === 0) ctx.moveTo(cx + Math.cos(ang) * rr, cy + Math.sin(ang) * rr);
+      else ctx.lineTo(cx + Math.cos(ang) * rr, cy + Math.sin(ang) * rr);
+    }
+    ctx.closePath();
+  }
+  function freezeCentre(){
+    return { x: (boss ? boss.x : WORLD_W/2) - camX, y: GROUND_Y - 60 - camY };
+  }
+  function freezeRadius(){
+    var e = 1 - Math.pow(1 - freezeT, 2.2);   // fast burst, slow finish
+    return e * 1700;
+  }
+
   function drawBackground(){
     var backdrop = STAGES[stageIndex].backdrop;
+    if (backdrop === "frost"){ drawFrostBackdrop(); return; }
     if (backdrop && backdrop !== "forest"){
       var bd = BACKDROPS[backdrop];
       if (bd && bd.ready){
@@ -1555,6 +1862,14 @@
       vg2.addColorStop(1, "rgba(8,4,4,0.45)");
       ctx.fillStyle = vg2;
       ctx.fillRect(0,0,VW,VH);
+      if (freezeT > 0){
+        var c = freezeCentre();
+        ctx.save();
+        frostPath(c.x, c.y, freezeRadius());
+        ctx.clip();
+        drawFrostBackdrop();
+        ctx.restore();
+      }
       return;
     }
     if (!bgReady){
@@ -1586,7 +1901,30 @@
     }
   }
 
+  // Ice ledges: the art is stretched to the ledge width (a little wider, as
+  // its ends taper); the wide floor repeats overlapping chunks.
+  function drawIcePlatform(p){
+    var sx = p.x - camX;
+    if (sx + p.w < -40 || sx > VW + 40 || p.y - camY > VH + 10 || p.y - camY < -140) return;
+    if (!iceImg.ready){
+      ctx.fillStyle = "#cfe8f5";
+      ctx.fillRect(sx, p.y, p.w, 14);
+      return;
+    }
+    var iw = iceImg.naturalWidth, ih = iceImg.naturalHeight;
+    if (p.oneWay){
+      var dw = p.w * 1.1, sc = dw / iw;
+      ctx.drawImage(iceImg, sx - p.w * 0.05, p.y - ICE_TOP * sc + 2, dw, ih * sc);
+    } else {
+      var tw = 300, sc2 = tw / iw, step = 250;
+      for (var x = -30; x < p.w; x += step){
+        ctx.drawImage(iceImg, sx + x, p.y - ICE_TOP * sc2 + 2, tw, ih * sc2);
+      }
+    }
+  }
+
   function drawPlatform(p){
+    if (STAGES[stageIndex].ice){ drawIcePlatform(p); return; }
     var sx = p.x - camX;
     if (sx + p.w < 0 || sx > VW) return;
 
@@ -1720,11 +2058,12 @@
     ctx.save();
     ctx.globalAlpha = Math.max(0, Math.min(1, a));
     ctx.textAlign = "center";
-    ctx.fillStyle = "#ffb57a";
+    var icy = STAGES[stageIndex].ice;
+    ctx.fillStyle = icy ? "#9fe4ff" : "#ffb57a";
     ctx.font = "12px 'Press Start 2P', monospace";
     ctx.fillText("STAGE " + (stageIndex + 1), VW/2, 92);
-    ctx.fillStyle = "#ffe2c4";
-    ctx.shadowColor = "rgba(255,90,20,0.9)";
+    ctx.fillStyle = icy ? "#eafaff" : "#ffe2c4";
+    ctx.shadowColor = icy ? "rgba(80,190,255,0.9)" : "rgba(255,90,20,0.9)";
     ctx.shadowBlur = 16;
     ctx.font = "26px 'Press Start 2P', monospace";
     ctx.fillText(STAGES[stageIndex].name.toUpperCase(), VW/2, 130);
@@ -1733,7 +2072,36 @@
 
   var IMP_WALK_FRAMES = ["walk0","walk1"];
 
+  function drawFlyer(f){
+    var life = 30;
+    if (f.dead_t > life) return;
+    var sx = f.cx - camX, sy = f.cy;
+    if (sx < -80 || sx > VW + 80 || sy - camY < -80 || sy - camY > VH + 80) return;
+    var set = f.state === "swoop" || f.state === "windup" ? "dive" : f.state === "hover" ? "hover" : "fly";
+    var rate = set === "hover" ? 0.16 : set === "dive" ? 0.3 : 0.2;
+    var img = FLYER_SPRITES[set + (Math.floor(f.anim * rate) % 4)];
+    ctx.save();
+    ctx.translate(sx, sy);
+    if (!f.alive){
+      ctx.globalAlpha = Math.max(0, 1 - f.dead_t / life);
+      ctx.rotate(f.facing * f.dead_t * 0.12);
+    }
+    if (f.state === "windup" && f.alive) ctx.translate((Math.random() - 0.5) * 3, 0);
+    ctx.scale(f.facing, 1);
+    if (f.hitFlash > 0 || !f.alive) ctx.filter = "brightness(2.4) saturate(0.3)";
+    if (img && img.ready){
+      var S = FLYER_SCALE;
+      // eyes sit a little above and ahead of the hit box centre
+      ctx.drawImage(img, 7 - img.ax * S, -9 - img.ay * S, img.naturalWidth * S, img.naturalHeight * S);
+    } else {
+      ctx.fillStyle = "#b8321e";
+      ctx.beginPath(); ctx.ellipse(0, 0, 17, 15, 0, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
   function drawEnemy(en){
+    if (en.flyer){ drawFlyer(en); return; }
     if (en.dead_t > 18) return;
     var sx = en.x - camX;
     if (sx + en.w < -20 || sx > VW+20) return;
@@ -1956,8 +2324,11 @@
     drawBackground();
 
     ctx.save();
+    ctx.translate(0, -Math.round(camY));
     drawPits();
     allPlatforms.forEach(drawPlatform);
+    if (freezeT > 0 && stageIndex !== FROST_STAGE) drawFreezingLedges();
+    drawSummit();
     drawExitHints();
     enemies.forEach(drawEnemy);
     drawBoss();
@@ -1966,13 +2337,90 @@
     drawExplosionFx();
     ctx.restore();
 
+    drawSnow();
+    if (freezeT > 0 && freezeT < 1 && stageIndex !== FROST_STAGE) drawFrostRim();
+
     ctx.restore();
 
     if (gameState === "playing" || gameState === "win" || gameState === "gameover"){
       drawHUD();
       drawBossBar();
     }
-    if (gameState === "playing") drawStageBanner();
+    if (gameState === "playing"){ drawStageBanner(); drawAbilityToast(); }
+  }
+
+  // While the frost spreads, the new ice ledges grow inside the frozen area.
+  function drawFreezingLedges(){
+    if (!frostPlatforms) frostPlatforms = buildPlatforms(STAGES[FROST_STAGE]);
+    var c = freezeCentre();
+    ctx.save();
+    ctx.translate(0, camY);              // clip in screen space...
+    frostPath(c.x, c.y, freezeRadius());
+    ctx.clip();
+    ctx.translate(0, -camY);             // ...draw in world space
+    frostPlatforms.forEach(drawIcePlatform);
+    ctx.restore();
+  }
+
+  // Glowing frost front with a cold flash at the start.
+  function drawFrostRim(){
+    var c = freezeCentre(), r = freezeRadius();
+    ctx.save();
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "rgba(200,245,255," + (0.9 * (1 - freezeT)).toFixed(2) + ")";
+    ctx.lineWidth = 5;
+    ctx.shadowColor = "rgba(140,220,255,0.95)";
+    ctx.shadowBlur = 24;
+    frostPath(c.x, c.y, r);
+    ctx.stroke();
+    ctx.restore();
+    if (freezeT < 0.25){
+      ctx.fillStyle = "rgba(210,240,255," + ((0.25 - freezeT) * 2.4).toFixed(2) + ")";
+      ctx.fillRect(0, 0, VW, VH);
+    }
+  }
+
+  // Snowfall: a stateless field of flakes driven by time, drifting with the
+  // camera so climbing feels like moving through it.
+  function drawSnow(){
+    var a = stageIndex === FROST_STAGE ? 1 : freezeT;
+    if (a <= 0) return;
+    var t = timeAlive;
+    ctx.save();
+    ctx.fillStyle = "#fff";
+    for (var i = 0; i < 90; i++){
+      var seed = (i * 9301 + 49297) % 233280 / 233280;
+      var seed2 = (i * 4271 + 1237) % 1000 / 1000;
+      var size = 1 + (i % 3);
+      var speed = 0.35 + size * 0.25;
+      var x = (seed * (VW + 60) + Math.sin(t * 0.02 + i) * 18 + t * 0.25 - camX * 0.15 * size) % (VW + 60);
+      if (x < 0) x += VW + 60;
+      var y = (seed2 * (VH + 40) + t * speed - camY * 0.2 * size) % (VH + 40);
+      if (y < 0) y += VH + 40;
+      ctx.globalAlpha = a * (0.35 + size * 0.18);
+      ctx.beginPath();
+      ctx.arc(x - 30, y - 20, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // A pillar of cold light marks the summit ledge.
+  function drawSummit(){
+    var sm = STAGES[stageIndex].summit;
+    if (!sm) return;
+    var cx = sm[0] + sm[2]/2 - camX, top = sm[1];
+    var pulse = 0.75 + 0.25 * Math.sin(timeAlive * 0.06);
+    var g = ctx.createLinearGradient(0, top - 260, 0, top);
+    g.addColorStop(0, "rgba(160,230,255,0)");
+    g.addColorStop(1, "rgba(190,240,255," + (0.45 * pulse).toFixed(2) + ")");
+    ctx.fillStyle = g;
+    ctx.fillRect(cx - 40, top - 260, 80, 260);
+    var rg = ctx.createRadialGradient(cx, top - 30, 2, cx, top - 30, 70);
+    rg.addColorStop(0, "rgba(230,250,255," + (0.85 * pulse).toFixed(2) + ")");
+    rg.addColorStop(1, "rgba(150,220,255,0)");
+    ctx.fillStyle = rg;
+    ctx.fillRect(cx - 70, top - 100, 140, 140);
   }
 
   // ---------- Loop ----------
