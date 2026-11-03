@@ -579,6 +579,25 @@
     });
   })();
 
+  // The golem's heart (dropped when it dies). anchor = [body centre x,
+  // body centre y, body bottom] in source pixels.
+  var HEART_SCALE = 0.65;
+  var HEART_SPRITES = {};
+  (function(){
+    var anchors = {
+      beat0:[39,49,110], beat1:[45,59,124], burst:[46,70,126], drip:[39,50,110],
+      smoke:[51,57,114], spin:[59,52,97], land:[59,60,107], squash:[46,41,76]
+    };
+    Object.keys(anchors).forEach(function(key){
+      var im = new Image();
+      im.ready = false;
+      im.onload = function(){ im.ready = true; };
+      im.src = "assets/heart_" + key + ".png";
+      im.a = anchors[key];
+      HEART_SPRITES[key] = im;
+    });
+  })();
+
   // Lava-rock platform art: one chunk, tiled/rescaled per platform width.
   var rockImg = new Image();
   rockImg.ready = false;
@@ -946,6 +965,121 @@
     ctx.restore();
   }
 
+  // The heart is flung out of the golem's chest, tumbles, splats onto the
+  // floor and keeps pumping. Touching it refills the flask.
+  function dropHeart(b){
+    var dir = b.x > WORLD_W / 2 ? -1 : 1;    // toward the middle of the room
+    heart = { x: b.x, y: b.y - 110, vx: dir * 3.4, vy: -10, rot: 0, dir: dir, state: "fly", t: 0 };
+  }
+
+  function heartBox(){ return rect(heart.x - 24, GROUND_Y - 50, 48, 50); }
+
+  function heartSpray(count, power, colors){
+    for (var i = 0; i < count; i++){
+      var ang = -Math.PI * Math.random(), sp = 1 + Math.random() * power;
+      explosionParticles.push({
+        x: heart.x, y: heart.state === "fly" ? heart.y : GROUND_Y - 20,
+        vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+        life: 20 + Math.random() * 25, maxLife: 45, size: 1.5 + Math.random() * 3,
+        color: colors[i % colors.length]
+      });
+    }
+  }
+
+  function updateHeart(dt){
+    if (!heart) return;
+    heart.t += dt;
+    if (heart.state === "fly"){
+      heart.vy += 0.45 * dt;
+      heart.x += heart.vx * dt;
+      heart.y += heart.vy * dt;
+      heart.rot += 0.22 * heart.dir * dt;
+      if (heart.x < 40 || heart.x > WORLD_W - 40){ heart.vx = -heart.vx; heart.dir = -heart.dir; heart.x = Math.max(40, Math.min(WORLD_W - 40, heart.x)); }
+      if (heart.y >= GROUND_Y - 24 && heart.vy > 0){
+        heart.state = "land"; heart.t = 0;
+        shake = Math.max(shake, 6);
+        heartSpray(14, 4, ["255,170,60", "150,20,20", "255,120,40"]);
+      }
+      return;
+    }
+    if (heart.state === "land" && heart.t > 10){ heart.state = "squash"; heart.t = 0; }
+    if (heart.state === "squash" && heart.t > 12){ heart.state = "rest"; heart.t = 0; }
+    if (heart.state === "taken"){
+      if (heart.t > 40) heart = null;
+      return;
+    }
+    if (gameState === "playing" && intersects(player, heartBox())){
+      heart.state = "taken"; heart.t = 0;
+      player.hp = player.maxHp;
+      player.invuln = Math.max(player.invuln, 30);
+      shake = Math.max(shake, 8);
+      heartSpray(40, 6, ["170,20,25", "120,10,15", "255,140,50", "255,200,90"]);
+    }
+  }
+
+  // Lub-dub: two quick swells (glowing frame) per beat, then a dark rest.
+  function heartPose(){
+    switch (heart.state){
+      case "fly": return { key: "spin", s: 1 };
+      case "land": return { key: "land", s: 1 };
+      case "squash": return { key: "squash", s: 1 };
+      case "taken": return { key: "burst", s: 1 + heart.t / 40 * 0.8 };
+    }
+    if (heart.t < 50) return { key: "smoke", s: 1 };   // still hissing from the fall
+    var ph = (heart.t - 50) % 66;
+    if (ph < 8)  return { key: "beat1", s: 1 + 0.14 * Math.sin(ph / 8 * Math.PI) };
+    if (ph < 14) return { key: "drip", s: 1 };
+    if (ph < 22) return { key: "beat1", s: 1 + 0.08 * Math.sin((ph - 14) / 8 * Math.PI) };
+    return { key: ph < 40 ? "drip" : "beat0", s: 1 };
+  }
+
+  function drawHeart(){
+    if (!heart) return;
+    var pose = heartPose(), img = HEART_SPRITES[pose.key];
+    var sx = heart.x - camX;
+    if (sx < -80 || sx > VW + 80) return;
+    var S = HEART_SCALE * pose.s;
+    ctx.save();
+    var glowA = heart.state === "rest" ? 0.25 + 0.25 * (pose.s - 1) / 0.14 : heart.state === "taken" ? 0 : 0.2;
+    if (glowA > 0){
+      var gy = heart.state === "fly" ? heart.y : GROUND_Y - 24;
+      var g = ctx.createRadialGradient(sx, gy, 4, sx, gy, 60);
+      g.addColorStop(0, "rgba(255,110,40," + glowA.toFixed(2) + ")");
+      g.addColorStop(1, "rgba(255,60,20,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(sx - 60, gy - 60, 120, 120);
+    }
+    if (img && img.ready){
+      var w = img.naturalWidth * S, h = img.naturalHeight * S;
+      if (heart.state === "fly" || heart.state === "taken"){
+        // centred on the body, spinning in the air / bursting
+        ctx.translate(sx, heart.state === "fly" ? heart.y : GROUND_Y - 26);
+        if (heart.state === "fly") ctx.rotate(heart.rot);
+        if (heart.state === "taken") ctx.globalAlpha = Math.max(0, 1 - heart.t / 40);
+        ctx.drawImage(img, -img.a[0] * S, -img.a[1] * S, w, h);
+      } else {
+        // sitting on the floor, swelling from its base
+        ctx.translate(sx, GROUND_Y + 3);
+        ctx.drawImage(img, -img.a[0] * S, -img.a[2] * S, w, h);
+      }
+    } else {
+      ctx.fillStyle = "#a01818";
+      ctx.beginPath(); ctx.arc(sx, GROUND_Y - 20, 16, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+    if (heart.state === "taken"){
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, 1 - heart.t / 40);
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#ffd2c4";
+      ctx.shadowColor = "rgba(255,60,40,0.9)";
+      ctx.shadowBlur = 10;
+      ctx.font = "12px 'Press Start 2P', monospace";
+      ctx.fillText("FULL HEALTH", sx, GROUND_Y - 80 - heart.t * 0.8);
+      ctx.restore();
+    }
+  }
+
   // ---------- Player ----------
   var GRAVITY = 0.62;
   var MOVE_SPEED = 4.2;
@@ -958,6 +1092,7 @@
   var explosionParticles, explosionFlash;
   var boss = null, fireballs = [], shockwaves = [];
   var freezeT = 0;   // 0..1 progress of the fire-to-frost change after the golem dies
+  var heart = null;  // the golem's heart once it has dropped
 
   function resetGame(){
     player = {
@@ -984,6 +1119,7 @@
     explosionParticles = [];
     explosionFlash = null;
     freezeT = 0;
+    heart = null;
     loadStage(0, "left");
     gameState = "playing";
   }
@@ -1410,6 +1546,7 @@
     }
 
     if (boss && gameState === "playing") updateBoss(dt, hitbox);
+    updateHeart(dt);
 
     var targetCam = player.x + player.w/2 - VW/2;
     targetCam = Math.max(0, Math.min(WORLD_W - VW, targetCam));
@@ -1431,7 +1568,7 @@
 
   // The golem's death cools the Molten Core into the bottom of the Frozen
   // Spire: same floor, new ice ledges reaching up, the rubble stays put.
-  var FREEZE_START = 110, FREEZE_LEN = 170;   // frames after the golem's death
+  var FREEZE_START = 150, FREEZE_LEN = 170;   // frames after the golem's death
   var FROST_STAGE = 3;
   var frostPlatforms = null;
   function freezeArena(){
@@ -1553,7 +1690,7 @@
       var before = b.dead_t;
       b.dead_t += dt;
       if (before < DIE_FRAMES[0] && b.dead_t >= DIE_FRAMES[0]) shake = Math.max(shake, 12);
-      if (before < DIE_FRAMES[1] && b.dead_t >= DIE_FRAMES[1]){ shake = 30; bossBurst(b, 80, 8); }
+      if (before < DIE_FRAMES[1] && b.dead_t >= DIE_FRAMES[1]){ shake = 30; bossBurst(b, 80, 8); dropHeart(b); }
       if (before < DIE_FRAMES[2] && b.dead_t >= DIE_FRAMES[2]) shake = Math.max(shake, 10);
       if (b.dead_t > FREEZE_START){
         var wasZero = freezeT === 0;
@@ -2332,6 +2469,7 @@
     drawExitHints();
     enemies.forEach(drawEnemy);
     drawBoss();
+    drawHeart();
     if (gameState !== "start") drawPlayer();
     drawBossAttacks();
     drawExplosionFx();
