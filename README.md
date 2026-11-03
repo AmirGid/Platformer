@@ -13,6 +13,14 @@ Stages are linked metroidvania style: walk off an edge or drop down a shaft to r
 
 Stages are defined in the `STAGES` list in `index.html`; add another entry to add a stage.
 
+
+## Sound
+
+Background music and the start laugh are recorded files. All other sound effects are synthesized in the browser (Web Audio API), so they need no files: sword swings, imp deaths, getting hurt, lava, jumps and the icy double jump, fire form, stage changes, the golem's roar, fireballs, leap, ground slam, flame breath, stone-crack hits, death and explosion, the heart's splat and distance-based heartbeat, the frost wave, the ability chime, the winged imps' screech, game over and the summit fanfare.
+
+The golem's roar and death can use recorded files instead: set their paths in `SFX_FILES` in `index.html` and they replace the synthesized versions once loaded.
+
+Press **M** or tap the speaker button to mute; the choice is remembered on that device. Sound starts after the first tap or key press (browsers require a user gesture).
 ## Running it
 
 No build step — it's a static page. Either:

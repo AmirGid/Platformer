@@ -120,6 +120,13 @@
     overflow:hidden;
     background:#7ec8e3;
   }
+  .mutebtn{
+    position:absolute; top:3%; right:12.5%; z-index:6;
+    width:34px; height:34px; padding:0; border-radius:50%;
+    border:1px solid rgba(255,200,160,0.45); background:rgba(10,6,8,0.55);
+    font-size:16px; line-height:32px; cursor:pointer; color:#fff;
+  }
+  .mutebtn:hover{ background:rgba(40,20,20,0.75); }
   #game{
     display:block;
     width:100%;
@@ -394,6 +401,7 @@
   <div class="cabinet">
     <div class="stage">
       <canvas id="game" width="960" height="540" tabindex="0" aria-label="Demonic Flame game canvas"></canvas>
+      <button class="mutebtn" id="muteBtn" type="button" aria-label="Mute sound"></button>
       <div class="overlay" id="overlay">
         <div class="panel">
           <h2 id="overlayTitle">DEMONIC FLAME</h2>
@@ -426,6 +434,7 @@
     <div class="ctrl"><span class="key">SPACE</span> attack</div>
     <div class="ctrl"><span class="key">X</span> fire form (4+ imps)</div>
     <div class="ctrl"><span class="key">R</span> restart</div>
+    <div class="ctrl"><span class="key">M</span> mute</div>
   </div>
 </div>
 
@@ -475,6 +484,212 @@
       if (p && p.catch) p.catch(function(){});
     } catch(e) {}
   }
+
+
+  // ---------- Sound effects ----------
+  // Small, frequent sounds are synthesized with the Web Audio API (no files,
+  // instant, retro). Big moments can use recorded files: put a path in
+  // SFX_FILES and it replaces the synthesized version once it has loaded.
+  var SFX_FILES = {
+    roar: "",        // golem wakes up
+    bossDeath: ""    // golem is shattered
+  };
+  var SFX = (function(){
+    var ac = null, out = null, noiseBuf = null, muted = false, last = {}, buffers = {};
+    try { muted = localStorage.getItem("df_muted") === "1"; } catch(e){}
+
+    function init(){
+      if (ac){ if (ac.state === "suspended") ac.resume(); return; }
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      ac = new AC();
+      var comp = ac.createDynamicsCompressor();
+      comp.connect(ac.destination);
+      out = ac.createGain();
+      out.gain.value = muted ? 0 : 0.6;
+      out.connect(comp);
+      noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+      var d = noiseBuf.getChannelData(0);
+      for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      Object.keys(SFX_FILES).forEach(function(k){
+        if (!SFX_FILES[k] || !window.fetch) return;
+        fetch(SFX_FILES[k]).then(function(r){ return r.arrayBuffer(); })
+          .then(function(a){ return new Promise(function(ok, no){ ac.decodeAudioData(a, ok, no); }); })
+          .then(function(b){ buffers[k] = b; }).catch(function(){});
+      });
+    }
+
+    function env(g, t, attack, dur, vol){
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0002, vol), t + attack);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    }
+    // o: type, f0, f1, dur, vol, delay, attack, lp (lowpass Hz), vib [rate, depth]
+    function tone(o){
+      var t = ac.currentTime + (o.delay || 0);
+      var osc = ac.createOscillator();
+      osc.type = o.type || "square";
+      osc.frequency.setValueAtTime(o.f0, t);
+      if (o.f1) osc.frequency.exponentialRampToValueAtTime(o.f1, t + o.dur);
+      var g = ac.createGain();
+      env(g, t, o.attack || 0.005, o.dur, o.vol);
+      var node = osc;
+      if (o.lp){ var f = ac.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = o.lp; osc.connect(f); node = f; }
+      node.connect(g); g.connect(out);
+      if (o.vib){
+        var lfo = ac.createOscillator(), lg = ac.createGain();
+        lfo.frequency.value = o.vib[0]; lg.gain.value = o.vib[1];
+        lfo.connect(lg); lg.connect(osc.frequency);
+        lfo.start(t); lfo.stop(t + o.dur + 0.05);
+      }
+      osc.start(t); osc.stop(t + o.dur + 0.05);
+    }
+    // o: filter (lowpass|bandpass|highpass), f0, f1, q, dur, vol, delay, attack
+    function hiss(o){
+      var t = ac.currentTime + (o.delay || 0);
+      var src = ac.createBufferSource();
+      src.buffer = noiseBuf; src.loop = true;
+      var f = ac.createBiquadFilter();
+      f.type = o.filter || "lowpass"; f.Q.value = o.q || 1;
+      f.frequency.setValueAtTime(o.f0, t);
+      if (o.f1) f.frequency.exponentialRampToValueAtTime(o.f1, t + o.dur);
+      var g = ac.createGain();
+      env(g, t, o.attack || 0.005, o.dur, o.vol);
+      src.connect(f); f.connect(g); g.connect(out);
+      src.start(t, Math.random() * 0.5); src.stop(t + o.dur + 0.05);
+    }
+    function notes(list, type, step, dur, vol, delay){
+      list.forEach(function(n, i){ tone({ type: type, f0: n, dur: dur, vol: vol, delay: (delay || 0) + i * step }); });
+    }
+    function buffer(name, vol){
+      var src = ac.createBufferSource(), g = ac.createGain();
+      src.buffer = buffers[name]; g.gain.value = vol;
+      src.connect(g); g.connect(out); src.start();
+    }
+
+    var SOUNDS = {
+      swing: function(v){ hiss({ filter: "bandpass", f0: 500, f1: 2800, q: 1.5, dur: 0.13, vol: 0.28 * v }); },
+      impDie: function(v){
+        hiss({ filter: "bandpass", f0: 1600, q: 1, dur: 0.07, vol: 0.3 * v });
+        tone({ type: "square", f0: 520, f1: 160, dur: 0.14, vol: 0.12 * v, lp: 1800 });
+        tone({ type: "triangle", f0: 900, f1: 1500, dur: 0.09, vol: 0.1 * v, delay: 0.05 });
+      },
+      hurt: function(v){
+        tone({ type: "sawtooth", f0: 230, f1: 85, dur: 0.24, vol: 0.22 * v, lp: 900 });
+        hiss({ f0: 900, dur: 0.12, vol: 0.28 * v });
+      },
+      sizzle: function(v){
+        hiss({ filter: "highpass", f0: 2000, f1: 5000, dur: 0.55, vol: 0.2 * v });
+        tone({ type: "sawtooth", f0: 160, f1: 55, dur: 0.35, vol: 0.15 * v, lp: 600 });
+      },
+      jump: function(v){ tone({ type: "square", f0: 250, f1: 520, dur: 0.12, vol: 0.08 * v, lp: 2000 }); },
+      doubleJump: function(v){
+        tone({ type: "triangle", f0: 700, f1: 1400, dur: 0.15, vol: 0.13 * v });
+        tone({ type: "sine", f0: 1800, f1: 2700, dur: 0.22, vol: 0.06 * v, delay: 0.03 });
+        hiss({ filter: "highpass", f0: 4000, dur: 0.14, vol: 0.07 * v });
+      },
+      ignite: function(v){
+        hiss({ f0: 300, f1: 4500, dur: 0.6, vol: 0.32 * v, attack: 0.05 });
+        tone({ type: "sawtooth", f0: 110, f1: 330, dur: 0.55, vol: 0.14 * v, lp: 1200 });
+      },
+      stage: function(v){ hiss({ filter: "bandpass", f0: 300, f1: 1300, q: 0.8, dur: 0.45, vol: 0.14 * v, attack: 0.12 }); },
+      gameover: function(v){
+        tone({ type: "triangle", f0: 330, f1: 110, dur: 0.9, vol: 0.2 * v });
+        tone({ type: "triangle", f0: 247, f1: 82, dur: 0.9, vol: 0.15 * v, delay: 0.15 });
+      },
+      win: function(v){ notes([523, 659, 784, 1047], "triangle", 0.12, 0.22, 0.16 * v); },
+      roar: function(v){
+        if (buffers.roar) return buffer("roar", v);
+        tone({ type: "sawtooth", f0: 95, f1: 55, dur: 1.3, vol: 0.3 * v, lp: 500, vib: [7, 8], attack: 0.08 });
+        tone({ type: "sawtooth", f0: 70, f1: 45, dur: 1.3, vol: 0.2 * v, lp: 300, attack: 0.08 });
+        hiss({ f0: 450, f1: 150, dur: 1.2, vol: 0.25 * v, attack: 0.1 });
+      },
+      fireball: function(v){
+        hiss({ filter: "bandpass", f0: 400, f1: 1500, q: 0.8, dur: 0.35, vol: 0.24 * v, attack: 0.03 });
+        tone({ type: "sawtooth", f0: 120, f1: 70, dur: 0.3, vol: 0.08 * v, lp: 400 });
+      },
+      leap: function(v){ hiss({ f0: 200, f1: 900, dur: 0.35, vol: 0.16 * v, attack: 0.08 }); },
+      slam: function(v){
+        tone({ type: "sine", f0: 90, f1: 35, dur: 0.55, vol: 0.55 * v });
+        hiss({ f0: 700, f1: 80, dur: 0.55, vol: 0.38 * v });
+      },
+      breath: function(v){
+        hiss({ filter: "bandpass", f0: 300, f1: 900, q: 0.7, dur: 1.15, vol: 0.3 * v, attack: 0.12, delay: 0.5 });
+        tone({ type: "sawtooth", f0: 80, f1: 60, dur: 1.15, vol: 0.12 * v, lp: 300, vib: [9, 6], delay: 0.5 });
+      },
+      bossHit: function(v){
+        tone({ type: "square", f0: 160, f1: 90, dur: 0.11, vol: 0.15 * v, lp: 800 });
+        hiss({ filter: "bandpass", f0: 2500, q: 1.2, dur: 0.08, vol: 0.28 * v });
+      },
+      swat: function(v){
+        tone({ type: "triangle", f0: 1200, f1: 600, dur: 0.1, vol: 0.12 * v });
+        hiss({ filter: "highpass", f0: 3000, dur: 0.08, vol: 0.12 * v });
+      },
+      bossDeath: function(v){
+        if (buffers.bossDeath) return buffer("bossDeath", v);
+        hiss({ filter: "bandpass", f0: 1800, f1: 400, dur: 0.35, vol: 0.32 * v });
+        tone({ type: "sawtooth", f0: 120, f1: 40, dur: 1.1, vol: 0.25 * v, lp: 400, vib: [5, 10] });
+      },
+      explosion: function(v){
+        tone({ type: "sine", f0: 70, f1: 25, dur: 1.4, vol: 0.6 * v });
+        hiss({ f0: 1500, f1: 60, dur: 1.6, vol: 0.5 * v });
+        for (var i = 0; i < 6; i++) hiss({ filter: "bandpass", f0: 1200 + Math.random() * 1500, q: 2, dur: 0.06, vol: 0.12 * v, delay: 0.25 + Math.random() * 0.9 });
+      },
+      beat: function(v){ tone({ type: "sine", f0: 70, f1: 42, dur: 0.16, vol: 0.5 * v, lp: 220 }); },
+      splat: function(v){
+        hiss({ f0: 900, f1: 200, dur: 0.22, vol: 0.32 * v });
+        tone({ type: "sine", f0: 120, f1: 55, dur: 0.16, vol: 0.32 * v });
+      },
+      heal: function(v){
+        hiss({ filter: "bandpass", f0: 800, q: 0.8, dur: 0.16, vol: 0.22 * v });
+        notes([523, 784, 1047, 1568], "sine", 0.07, 0.3, 0.13 * v, 0.05);
+      },
+      freeze: function(v){
+        hiss({ filter: "highpass", f0: 3000, f1: 8000, dur: 2.3, vol: 0.12 * v, attack: 0.3 });
+        tone({ type: "sine", f0: 420, f1: 180, dur: 1.6, vol: 0.1 * v });
+        for (var i = 0; i < 9; i++) tone({ type: "sine", f0: 1500 + Math.random() * 2200, dur: 0.35, vol: 0.05 * v, delay: 0.1 + i * 0.22 });
+      },
+      ability: function(v){ notes([659, 880, 1319], "triangle", 0.1, 0.3, 0.14 * v); },
+      screech: function(v){ tone({ type: "sawtooth", f0: 1100, f1: 1750, dur: 0.2, vol: 0.06 * v, lp: 3000, vib: [30, 40] }); }
+    };
+
+    function play(name, vol){
+      if (!ac || muted || !SOUNDS[name]) return;
+      if (ac.state === "suspended") ac.resume();
+      var now = ac.currentTime;
+      if (last[name] && now - last[name] < 0.04) return;   // don't stack the same sound
+      last[name] = now;
+      var v = vol === undefined ? 1 : vol;
+      if (v <= 0.02) return;
+      try { SOUNDS[name](v); } catch(e){}
+    }
+    function setMuted(m){
+      muted = m;
+      if (out) out.gain.value = m ? 0 : 0.6;
+      bgMusic.muted = m; sfxLaugh.muted = m;
+      try { localStorage.setItem("df_muted", m ? "1" : "0"); } catch(e){}
+    }
+    return { init: init, play: play, setMuted: setMuted, isMuted: function(){ return muted; } };
+  })();
+  ["pointerdown", "keydown", "touchstart"].forEach(function(evt){
+    document.addEventListener(evt, SFX.init, { capture: true });
+  });
+  // volume falls off with distance from the player (for sounds in the world)
+  function near(x, y){
+    if (!player) return 1;
+    var dx = x - (player.x + player.w/2), dy = y - (player.y + player.h/2);
+    return Math.max(0, Math.min(1, 1.15 - Math.sqrt(dx*dx + dy*dy) / 650));
+  }
+
+  // Mute button (and M key); the choice is remembered on this device.
+  (function(){
+    var btn = document.getElementById("muteBtn");
+    function sync(){ btn.textContent = SFX.isMuted() ? "🔇" : "🔊"; btn.setAttribute("aria-label", SFX.isMuted() ? "Unmute sound" : "Mute sound"); }
+    SFX.setMuted(SFX.isMuted());
+    sync();
+    btn.addEventListener("click", function(e){ e.stopPropagation(); SFX.init(); SFX.setMuted(!SFX.isMuted()); sync(); btn.blur(); });
+    document.addEventListener("keydown", function(e){ if (e.code === "KeyM"){ SFX.init(); SFX.setMuted(!SFX.isMuted()); sync(); } });
+  })();
 
   // ---------- Backdrop art (moonlit forest overlooking the city) ----------
   var bgImg = new Image();
@@ -542,12 +757,17 @@
     });
   })();
 
-  // Imp enemy sprites (native art faces LEFT; flip when moving right).
+  // Imp enemy sprites. The walk frames face RIGHT natively (flip when moving
+  // left); the idle frame faces the viewer.
   var IMP_SPRITES = {};
   (function(){
     var sources = {
       walk0: "assets/imp_walk0.png",
       walk1: "assets/imp_walk1.png",
+      walk2: "assets/imp_walk2.png",
+      walk3: "assets/imp_walk3.png",
+      walk4: "assets/imp_walk4.png",
+      walk5: "assets/imp_walk5.png",
       idle:  "assets/imp_idle.png"
     };
     Object.keys(sources).forEach(function(key){
@@ -887,14 +1107,14 @@
     if (f.swoopCd > 0) f.swoopCd -= dt;
     var pcx = player.x + player.w/2, pcy = player.y + player.h/2;
     var pdx = pcx - f.cx, pdy = pcy - f.cy;
-    var near = pdx*pdx + pdy*pdy < FLYER_SIGHT * FLYER_SIGHT;
+    var spotted = pdx*pdx + pdy*pdy < FLYER_SIGHT * FLYER_SIGHT;
     var home = f.route[f.leg];
     if (f.state === "hover"){
       f.cx += (home[0] - f.cx) * Math.min(1, 0.1 * dt);
       f.cy = home[1] + Math.sin(f.anim * 0.08) * 7;
       f.facing = pdx > 0 ? 1 : -1;
-      if (near && f.swoopCd <= 0 && gameState === "playing"){
-        f.state = "windup"; f.t = 0;
+      if (spotted && f.swoopCd <= 0 && gameState === "playing"){
+        f.state = "windup"; f.t = 0; SFX.play("screech", near(f.cx, f.cy));
       } else if (f.t > 110){
         f.state = "fly"; f.t = 0;
         f.from = [f.cx, f.cy];
@@ -910,7 +1130,7 @@
       f.cy = f.from[1] + (to2[1] - f.from[1]) * e - Math.sin(Math.PI * k) * 40;
       f.facing = to2[0] >= f.from[0] ? 1 : -1;
       if (k >= 1){ f.state = "hover"; f.t = 0; }
-      else if (near && f.swoopCd <= 0 && k > 0.2 && gameState === "playing"){ f.state = "windup"; f.t = 0; }
+      else if (spotted && f.swoopCd <= 0 && k > 0.2 && gameState === "playing"){ f.state = "windup"; f.t = 0; SFX.play("screech", near(f.cx, f.cy)); }
     } else if (f.state === "windup"){
       f.facing = pdx > 0 ? 1 : -1;
       f.cx -= f.facing * 0.9 * dt;
@@ -953,7 +1173,7 @@
     if (!c) return;
     c.t += dt;
     if (c.state === "pending"){
-      if (stageIndex === FROST_STAGE && stageBannerT <= 0){ c.state = "show"; c.t = 0; c.used0 = player.doubleJumps; }
+      if (stageIndex === FROST_STAGE && stageBannerT <= 0){ c.state = "show"; c.t = 0; c.used0 = player.doubleJumps; SFX.play("ability"); }
     } else if (c.state === "show"){
       if ((c.t > 150 && player.doubleJumps - c.used0 >= 2) || c.t > 900){ c.state = "hide"; c.t = 0; }
     } else if (c.state === "hide" && c.t > 24){
@@ -1112,6 +1332,7 @@
       if (heart.x < 40 || heart.x > WORLD_W - 40){ heart.vx = -heart.vx; heart.dir = -heart.dir; heart.x = Math.max(40, Math.min(WORLD_W - 40, heart.x)); }
       if (heart.y >= GROUND_Y - 24 && heart.vy > 0){
         heart.state = "land"; heart.t = 0;
+        SFX.play("splat", near(heart.x, GROUND_Y));
         shake = Math.max(shake, 6);
         heartSpray(14, 4, ["255,170,60", "150,20,20", "255,120,40"]);
       }
@@ -1119,12 +1340,18 @@
     }
     if (heart.state === "land" && heart.t > 10){ heart.state = "squash"; heart.t = 0; }
     if (heart.state === "squash" && heart.t > 12){ heart.state = "rest"; heart.t = 0; }
+    if (heart.state === "rest" && heart.t > 50){
+      // thump on each swell of the lub-dub (see heartPose), louder up close
+      var ph0 = (heart.t - dt - 50) % 66, ph1 = (heart.t - 50) % 66;
+      if (ph1 < ph0 || (ph0 < 14 && ph1 >= 14)) SFX.play("beat", near(heart.x, GROUND_Y - 24) * (ph1 < ph0 ? 1 : 0.7));
+    }
     if (heart.state === "taken"){
       if (heart.t > 40) heart = null;
       return;
     }
     if (gameState === "playing" && intersects(player, heartBox())){
       heart.state = "taken"; heart.t = 0;
+      SFX.play("heal");
       player.hp = player.maxHp;
       player.invuln = Math.max(player.invuln, 30);
       shake = Math.max(shake, 8);
@@ -1244,6 +1471,7 @@
   var stageBannerT = 0;    // how long the stage name stays on screen
   var STAGE_BANNER_TIME = 150;
   function loadStage(index, from){
+    if (timeAlive > 0) SFX.play("stage");
     stageIndex = index;
     var stage = STAGES[index];
     WORLD_W = stage.width;
@@ -1283,6 +1511,7 @@
   // instantly instead of costing a hit. The form lasts 15 seconds, after
   // which the player reverts to normal and the imp counter resets to 0.
   function triggerSuperMode(){
+    SFX.play("ignite");
     player.superMode = true;
     player.superTimer = SUPER_MODE_DURATION;
     shake = 14;
@@ -1527,8 +1756,10 @@
     if (keys.ArrowUp && player.onGround){
       player.vy = JUMP_V;
       player.onGround = false;
+      SFX.play("jump");
     } else if (upPressed && !player.onGround && player.canDoubleJump && !player.airJumpUsed){
       player.vy = JUMP_V * 0.92;
+      SFX.play("doubleJump");
       player.airJumpUsed = true;
       player.doubleJumps += 1;
       doubleJumpPuff();
@@ -1570,9 +1801,10 @@
     if (player.y > VH + 40){
       player.hp -= 1;
       shake = 12;
+      SFX.play("sizzle");
       if (player.hp <= 0){
         player.hp = 0;
-        gameState = "gameover";
+        gameState = "gameover"; SFX.play("gameover");
         showOverlay("YOU BURNED", "The lava took you. Score: " + score + " · Time: " + Math.floor(timeAlive/60) + "s", "Try Again");
         return;
       }
@@ -1592,6 +1824,7 @@
     if (keys.Space && player.attackCd <= 0){
       player.attackT = 14;
       player.attackCd = 26;
+      SFX.play("swing");
     }
     if (player.invuln > 0) player.invuln -= dt;
     if (shake > 0) shake -= dt;
@@ -1624,7 +1857,7 @@
       if (en.flyer){
         updateFlyer(en, dt);
       } else {
-        en.walkCycle += 0.2 * dt;
+        en.walkCycle += 0.16 * dt;
         if (en.x <= en.lo) en.vx = Math.abs(en.vx);
         if (en.x + en.w >= en.hi) en.vx = -Math.abs(en.vx);
         en.vy += GRAVITY * dt;
@@ -1640,6 +1873,7 @@
         en.hitFlash = 10;
         score += 1;
         shake = 8;
+        SFX.play("impDie");
       } else if (player.superMode && intersects(player, en)){
         // overpowered in fire form: mere contact instantly kills the enemy
         // and the player takes no damage at all.
@@ -1647,15 +1881,17 @@
         en.hitFlash = 10;
         score += 1;
         shake = 6;
+        SFX.play("impDie");
       } else if (player.invuln <= 0 && intersects(player, en)){
         player.hp -= 1;
         player.invuln = 65;
         shake = 10;
+        SFX.play("hurt");
         player.vx = (player.x < en.x ? -1 : 1) * 3;
         player.vy = -6;
         if (player.hp <= 0){
           player.hp = 0;
-          gameState = "gameover";
+          gameState = "gameover"; SFX.play("gameover");
           showOverlay("YOU DIED", "The imps got the better of you. Score: " + score + " · Time: " + Math.floor(timeAlive/60) + "s", "Try Again");
         }
       }
@@ -1678,6 +1914,7 @@
         player.x + player.w > summit[0] && player.x < summit[0] + summit[2] && gameState === "playing"){
       gameState = "win";
       var lifePct = Math.round((player.hp / player.maxHp) * 100);
+      SFX.play("win");
       showOverlay("SUMMIT REACHED!", "You shattered the Magma Golem and climbed the Frozen Spire with " + lifePct + "% of your flask still full. Time: " + Math.floor(timeAlive/60) + "s", "Play Again");
     }
   }
@@ -1703,6 +1940,7 @@
   // Shared "player got hit" handling for the boss and its attacks.
   function hurtPlayer(fromX, deathText){
     if (player.invuln > 0 || player.superMode) return;
+    SFX.play("hurt");
     player.hp -= 1;
     player.invuln = 65;
     shake = 12;
@@ -1711,7 +1949,7 @@
     player.x = Math.max(0, Math.min(WORLD_W - player.w, player.x));
     if (player.hp <= 0){
       player.hp = 0;
-      gameState = "gameover";
+      gameState = "gameover"; SFX.play("gameover");
       showOverlay("YOU DIED", deathText + " Score: " + score + " · Time: " + Math.floor(timeAlive/60) + "s", "Try Again");
     }
   }
@@ -1752,12 +1990,17 @@
     return box.y < cy + hh && box.y + box.h > cy - hh;
   }
 
-  function setBossState(b, s){ b.state = s; b.t = 0; b.fired = false; }
+  var BOSS_STATE_SOUNDS = { intro: "roar", air: "leap", land: "slam", breath: "breath" };
+  function setBossState(b, s){
+    b.state = s; b.t = 0; b.fired = false;
+    if (BOSS_STATE_SOUNDS[s]) SFX.play(BOSS_STATE_SOUNDS[s], near(b.x, b.y - 80));
+  }
 
   function damageBoss(b, amount, invuln){
     b.hp -= amount;
     b.invuln = invuln;
     b.hitFlash = 10;
+    SFX.play(b.hp <= 0 ? "bossDeath" : "bossHit");
     shake = Math.max(shake, 6);
     if (!b.phase2 && b.hp <= b.maxHp / 2) b.phase2 = true;
     if (b.hp <= 0){
@@ -1789,6 +2032,7 @@
   var DIE_FRAMES = [28, 58, 96];
 
   function spawnFireball(b, angleOffset){
+    SFX.play("fireball", near(b.x, b.y - 100));
     var hand = { x: b.x + b.facing * 107, y: b.y - 98 };
     var tx = player.x + player.w/2, ty = player.y + player.h/2;
     var ang = Math.atan2(ty - hand.y, tx - hand.x) + angleOffset;
@@ -1806,12 +2050,12 @@
       var before = b.dead_t;
       b.dead_t += dt;
       if (before < DIE_FRAMES[0] && b.dead_t >= DIE_FRAMES[0]) shake = Math.max(shake, 12);
-      if (before < DIE_FRAMES[1] && b.dead_t >= DIE_FRAMES[1]){ shake = 30; bossBurst(b, 80, 8); dropHeart(b); }
+      if (before < DIE_FRAMES[1] && b.dead_t >= DIE_FRAMES[1]){ shake = 30; bossBurst(b, 80, 8); dropHeart(b); SFX.play("explosion"); }
       if (before < DIE_FRAMES[2] && b.dead_t >= DIE_FRAMES[2]) shake = Math.max(shake, 10);
       if (b.dead_t > FREEZE_START){
         var wasZero = freezeT === 0;
         freezeT = Math.min(1, (b.dead_t - FREEZE_START) / FREEZE_LEN);
-        if (wasZero) shake = Math.max(shake, 8);
+        if (wasZero){ shake = Math.max(shake, 8); SFX.play("freeze"); }
         if (freezeT >= 1 && stageIndex !== FROST_STAGE) freezeArena();
       }
       return;
@@ -1897,7 +2141,7 @@
       f.t += dt; f.x += f.vx * dt; f.y += f.vy * dt;
       var fb = rect(f.x - f.r, f.y - f.r, f.r*2, f.r*2);
       var gone = f.x < -40 || f.x > WORLD_W + 40 || f.y > GROUND_Y || f.t > 400;
-      if (!gone && hitbox && intersects(hitbox, fb)){ gone = true; shake = Math.max(shake, 4); }
+      if (!gone && hitbox && intersects(hitbox, fb)){ gone = true; shake = Math.max(shake, 4); SFX.play("swat"); }
       else if (!gone && intersects(player, fb)){ gone = true; hurtPlayer(f.x, "A fireball got you."); }
       if (gone){
         for (var k = 0; k < 10; k++){
@@ -2323,7 +2567,8 @@
     ctx.restore();
   }
 
-  var IMP_WALK_FRAMES = ["walk0","walk1"];
+  var IMP_WALK_FRAMES = ["walk0","walk1","walk2","walk3","walk4","walk5"];
+  var IMP_WALK_AX = 52;   // body centre in the walk frames (source px)
 
   function drawFlyer(f){
     var life = 30;
@@ -2359,7 +2604,7 @@
     var sx = en.x - camX;
     if (sx + en.w < -20 || sx > VW+20) return;
 
-    var key = en.alive ? IMP_WALK_FRAMES[Math.floor(en.walkCycle) % 2] : "idle";
+    var key = en.alive ? IMP_WALK_FRAMES[Math.floor(en.walkCycle) % IMP_WALK_FRAMES.length] : "idle";
     var img = IMP_SPRITES[key];
     var fade = en.alive ? 1 : Math.max(0, 1 - en.dead_t/18);
 
@@ -2371,11 +2616,12 @@
       var dH = img.naturalHeight / 2;
       var cx = sx + en.w/2, footY = en.y + en.h;
       ctx.translate(cx, footY);
-      if (en.vx > 0) ctx.scale(-1, 1); // art faces left natively
+      if (en.vx < 0) ctx.scale(-1, 1); // walk art faces right natively
       if (en.hitFlash > 0){
         ctx.filter = "brightness(2.4) saturate(0.3)";
       }
-      ctx.drawImage(img, -dW/2, -dH, dW, dH);
+      var ax = en.alive ? IMP_WALK_AX / 2 : dW / 2;
+      ctx.drawImage(img, -ax, -dH, dW, dH);
     } else {
       ctx.fillStyle = "#8a5cf6";
       ctx.beginPath();
