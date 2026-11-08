@@ -1015,7 +1015,9 @@
       summit: [480, -1900, 360],     // reach this ledge to win
       ground: [[0, 1300]],
       platforms: [
-        [200, 350, 150], [400, 380, 100], [575, 280, 150], [950, 350, 150],   // the old arena ledges
+        // first ledges sit 180-190px up: out of single-jump reach (~134px), so
+        // the climb starts with the newly earned double jump (~238px)
+        [190, 290, 150], [575, 280, 150], [950, 290, 150],
         [380, 180, 130], [800, 190, 130],
         [120, 90, 140], [1040, 90, 140],
         [330, 0, 120], [820, -10, 120],
