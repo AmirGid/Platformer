@@ -9,7 +9,7 @@ Stages are linked metroidvania style: walk off an edge or drop down a shaft to r
 ```
  Moonlit Ridge = Ember Hollow = Ashen Woods = Cinder Cliffs
                       | shaft                     | shaft
- Smoldering Den = Molten Core /              The Chute
+ Frozen Den     = Molten Core /              The Chute
                   Frozen Spire                    | shaft
                                              Obsidian Gate (finish)
 ```
@@ -24,7 +24,7 @@ The route: Ember Hollow, down into the golem's room, beat it, climb the Frozen S
 6. **Cinder Cliffs**: red-lit cliffs with winged imps; the last pit is a shaft down into The Chute.
 7. **The Chute**: a narrow, tall shaft. Work your way down the ledges past winged imps; the pit at the bottom drops into the Obsidian Gate. Double-jump up out of the top to go back to Cinder Cliffs.
 8. **Obsidian Gate** (finish): the last gauntlet of pits and fast imps. Reach the glowing gate at the far end to win.
-9. **Smoldering Den**: an optional side cave west of the golem's room.
+9. **Frozen Den**: an icy side cave west of the golem's room. Climb its ice ledges to the top left to find the **world map**: once you have it, press **M** (or tap the map button) to open a map of the stages you've visited, with a marker showing where you are. The game pauses while it's open.
 
 Stages are defined in the `STAGES` list in `index.html`; add another entry to add a stage.
 
@@ -35,7 +35,7 @@ Background music and the start laugh are recorded files. All other sound effects
 
 The golem's roar and death can use recorded files instead: set their paths in `SFX_FILES` in `index.html` and they replace the synthesized versions once loaded.
 
-Press **M** or tap the speaker button to mute; the choice is remembered on that device. Sound starts after the first tap or key press (browsers require a user gesture).
+Press **N** or tap the speaker button to mute; the choice is remembered on that device. Sound starts after the first tap or key press (browsers require a user gesture).
 ## Running it
 
 No build step — it's a static page. Either:

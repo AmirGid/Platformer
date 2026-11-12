@@ -127,6 +127,8 @@
     font-size:16px; line-height:32px; cursor:pointer; color:#fff;
   }
   .mutebtn:hover{ background:rgba(40,20,20,0.75); }
+  .mapbtn{ right:calc(12.5% + 84px); }
+  .mapbtn[hidden]{ display:none; }
   /* TESTING ONLY: god mode toggle, remove for the final version */
   .godbtn{ right:calc(12.5% + 42px); font:bold 10px/32px 'IBM Plex Mono', monospace; letter-spacing:0.5px; }
   .godbtn.on{ background:rgba(230,170,40,0.9); color:#1a0e00; border-color:#ffe08a; box-shadow:0 0 10px rgba(255,200,80,0.8); }
@@ -407,6 +409,7 @@
       <button class="mutebtn" id="muteBtn" type="button" aria-label="Mute sound"></button>
       <!-- TESTING ONLY: god mode toggle, remove for the final version -->
       <button class="mutebtn godbtn" id="godBtn" type="button" aria-label="Toggle god mode">GOD</button>
+      <button class="mutebtn mapbtn" id="mapBtn" type="button" aria-label="World map" hidden>&#128506;</button>
       <div class="overlay" id="overlay">
         <div class="panel">
           <h2 id="overlayTitle">DEMONIC FLAME</h2>
@@ -439,7 +442,8 @@
     <div class="ctrl"><span class="key">SPACE</span> attack</div>
     <div class="ctrl"><span class="key">X</span> fire form (4+ imps)</div>
     <div class="ctrl"><span class="key">R</span> restart</div>
-    <div class="ctrl"><span class="key">M</span> mute</div>
+    <div class="ctrl"><span class="key">M</span> map (once found)</div>
+    <div class="ctrl"><span class="key">N</span> mute</div>
   </div>
 </div>
 
@@ -686,14 +690,14 @@
     return Math.max(0, Math.min(1, 1.15 - Math.sqrt(dx*dx + dy*dy) / 650));
   }
 
-  // Mute button (and M key); the choice is remembered on this device.
+  // Mute button (and N key); the choice is remembered on this device.
   (function(){
     var btn = document.getElementById("muteBtn");
     function sync(){ btn.textContent = SFX.isMuted() ? "🔇" : "🔊"; btn.setAttribute("aria-label", SFX.isMuted() ? "Unmute sound" : "Mute sound"); }
     SFX.setMuted(SFX.isMuted());
     sync();
     btn.addEventListener("click", function(e){ e.stopPropagation(); SFX.init(); SFX.setMuted(!SFX.isMuted()); sync(); btn.blur(); });
-    document.addEventListener("keydown", function(e){ if (e.code === "KeyM"){ SFX.init(); SFX.setMuted(!SFX.isMuted()); sync(); } });
+    document.addEventListener("keydown", function(e){ if (e.code === "KeyN"){ SFX.init(); SFX.setMuted(!SFX.isMuted()); sync(); } });
   })();
 
   // TESTING ONLY: god mode (button or G key) - nothing can hurt you. Remove
@@ -1227,22 +1231,27 @@
       ]
     },
     {
-      // D: a side cave to the left of the golem's room, open once it is dead.
-      name: "Smoldering Den",
+      // D: a frozen side cave west of the golem's room, open once it is dead.
+      // The ice ledges climb right-to-left up to the world map at the top left.
+      name: "Frozen Den",
       exits: { right: 3 },
-      backdrop: "cavern",
-      tint: "rgba(120,50,10,0.22)",
+      backdrop: "frost",
+      ice: true,
+      oneWay: true,
       width: 1800,
-      ground: [[0, 800], [920, 1800]],
+      topY: -420,
+      mapItem: [205, -290],         // the world map scroll: x, top of the ledge it sits on
+      ground: [[0, 1800]],
       platforms: [
-        [200, 380, 130], [380, 300, 120], [560, 230, 140],
-        [1000, 380, 130], [1200, 300, 140], [1420, 380, 130], [1580, 300, 120]
+        [1500, 370, 150], [1280, 280, 140], [1060, 190, 140], [840, 100, 140],
+        [620, 10, 140], [400, -80, 140], [180, -180, 140],
+        [40, -290, 200],                                      // top left: the map
+        [1450, 140, 120], [1200, -60, 120]
       ],
-      enemies: [
-        [400, 40, 790, 1.3, 444],
-        [620, 565, 695, 1.0, 204],     // high ledge
-        [1300, 930, 1790, 1.6, 444],
-        [1250, 1205, 1335, 1.0, 274]   // platform
+      enemies: [],
+      flyers: [
+        [[1350, 220], [1000, 120]],
+        [[700, -110], [360, -200]]
       ]
     }
   ];
@@ -1642,8 +1651,12 @@
       invuln:0, attackT:0, attackCd:0, walkCycle:0,
       superMode:false, superTimer:0,
       canDoubleJump:false, airJumpUsed:false, upHeld:false, doubleJumps:0,
-      bigFlask:false, flaskGrowT:0, fillShown:1
+      bigFlask:false, flaskGrowT:0, fillShown:1,
+      hasMap:false, visited:{}
     };
+    mapOpen = false;
+    itemCard = null;
+    syncMapBtn();
     abilityCard = null;
     stageState = STAGES.map(function(s){
       return {
@@ -1675,6 +1688,7 @@
     if (timeAlive > 0) SFX.play("stage");
     if (index === 2 && arenaFrozen) index = FROST_STAGE;   // the golem's room stays frozen
     stageIndex = index;
+    player.visited[mapKey(index)] = true;
     var stage = STAGES[index];
     WORLD_W = stage.width;
     allPlatforms = buildPlatforms(stage);
@@ -1798,6 +1812,211 @@
     }
   }
 
+  // ---------- World map ----------
+  // A scroll in the Frozen Den. Once picked up, M (or the map button) opens a
+  // map of the stages you have visited, with a marker where you are now.
+  var mapOpen = false;
+  var itemCard = null;      // "new item" card after picking up the map: { t }
+  function mapKey(index){ return index === 2 || index === FROST_STAGE ? "boss" : String(index); }
+
+  function toggleMap(){
+    if (!player || !player.hasMap || gameState !== "playing") return;
+    mapOpen = !mapOpen;
+    itemCard = null;
+    SFX.play(mapOpen ? "ability" : "swing", 0.6);
+  }
+  function syncMapBtn(){
+    var b = document.getElementById("mapBtn");
+    if (b) b.hidden = !(player && player.hasMap);
+  }
+  document.getElementById("mapBtn").addEventListener("click", function(e){
+    e.stopPropagation(); toggleMap(); this.blur();
+  });
+
+  function updateMapItem(dt){
+    if (itemCard){ itemCard.t += dt; if (itemCard.t > 330) itemCard = null; }
+    var mi = STAGES[stageIndex].mapItem;
+    if (!mi || player.hasMap) return;
+    if (intersects(player, rect(mi[0] - 20, mi[1] - 50, 40, 50))){
+      player.hasMap = true;
+      itemCard = { t: 0 };
+      shake = Math.max(shake, 4);
+      SFX.play("heal");
+      syncMapBtn();
+    }
+  }
+
+  // A rolled parchment with a red ribbon (placeholder art).
+  function drawScroll(x, y, s){
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(s, s);
+    ctx.fillStyle = "#e9d6a6";
+    ctx.strokeStyle = "#6b4a22";
+    ctx.lineWidth = 2;
+    roundRect(-16, -11, 32, 22, 3);
+    ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = "rgba(107,74,34,0.55)";
+    ctx.lineWidth = 1;
+    for (var l = -5; l <= 5; l += 5){ ctx.beginPath(); ctx.moveTo(-9, l); ctx.lineTo(9, l); ctx.stroke(); }
+    [-17, 17].forEach(function(ex){
+      ctx.fillStyle = "#cdb17a";
+      ctx.strokeStyle = "#6b4a22";
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(ex, 0, 4, 13, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    });
+    ctx.fillStyle = "#b3202a";
+    ctx.fillRect(-2, -11, 4, 22);
+    ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawMapItem(){
+    var mi = STAGES[stageIndex].mapItem;
+    if (!mi || player.hasMap) return;
+    var x = mi[0] - camX, bob = Math.sin(timeAlive * 0.07) * 4, y = mi[1] - 28 + bob;
+    var pulse = 0.6 + 0.4 * Math.sin(timeAlive * 0.09);
+    var g = ctx.createRadialGradient(x, y, 2, x, y, 46);
+    g.addColorStop(0, "rgba(255,230,150," + (0.55 * pulse).toFixed(2) + ")");
+    g.addColorStop(1, "rgba(255,200,90,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(x - 46, y - 46, 92, 92);
+    drawScroll(x, y, 1);
+    for (var i = 0; i < 4; i++){
+      var k = (timeAlive * 0.04 + i / 4) % 1;
+      ctx.fillStyle = "rgba(255,240,190," + (1 - k).toFixed(2) + ")";
+      ctx.beginPath(); ctx.arc(x + Math.cos(i * 1.7 + timeAlive * 0.03) * 22, y - k * 30, 1.6, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  function drawItemCard(){
+    if (!itemCard) return;
+    var t = itemCard.t, a = Math.min(1, t / 18, (330 - t) / 24);
+    var w = 360, h = 120, x = VW/2 - w/2, y = 60 - (1 - Math.min(1, t / 18)) * 20;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, a);
+    roundRect(x, y, w, h, 14);
+    ctx.fillStyle = "rgba(20,14,8,0.88)";
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(240,210,140,0.85)";
+    ctx.shadowColor = "rgba(255,200,100,0.7)";
+    ctx.shadowBlur = 14;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    drawScroll(x + 58, y + h/2, 1.5);
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#f3d58e";
+    ctx.font = "10px 'Press Start 2P', monospace";
+    ctx.fillText("NEW ITEM", x + 104, y + 36);
+    ctx.fillStyle = "#fff4dc";
+    ctx.font = "16px 'Press Start 2P', monospace";
+    ctx.fillText("WORLD MAP", x + 104, y + 64);
+    ctx.fillStyle = "#e6d3b0";
+    ctx.font = "9px 'Press Start 2P', monospace";
+    ctx.fillText(root.classList.contains("touch") ? "TAP THE MAP BUTTON" : "PRESS M TO OPEN", x + 104, y + 90);
+    ctx.restore();
+  }
+
+  // Map layout (map units), following the hand-drawn plan: the top row runs
+  // west to east, the golem's room hangs below Ember Hollow, The Chute is a
+  // narrow shaft between Cinder Cliffs and the Obsidian Gate.
+  var MAP_ROOMS = {
+    "0":    { x: 0,   y: 0,   w: 112, h: 56, name: "Moonlit Ridge", color: "#26385a" },
+    "1":    { x: 130, y: 0,   w: 112, h: 56, name: "Ember Hollow",  color: "#6a2616" },
+    "4":    { x: 260, y: 0,   w: 112, h: 56, name: "Ashen Woods",   color: "#46464f" },
+    "5":    { x: 390, y: 0,   w: 112, h: 56, name: "Cinder Cliffs", color: "#7a2a10" },
+    "boss": { x: 130, y: 64,  w: 112, h: 96, name: "Molten Core",   color: "#7a3410" },
+    "8":    { x: 0,   y: 104, w: 112, h: 56, name: "Frozen Den",    color: "#2f6080" },
+    "6":    { x: 429, y: 64,  w: 34,  h: 32, name: "",              color: "#3a1a44" },
+    "7":    { x: 390, y: 104, w: 112, h: 56, name: "Obsidian Gate", color: "#4a1a6a" }
+  };
+  // doors between rooms: [roomA, roomB, x, y, vertical]
+  var MAP_DOORS = [
+    ["0", "1", 121, 28, false], ["1", "4", 251, 28, false], ["4", "5", 381, 28, false],
+    ["1", "boss", 186, 60, true], ["8", "boss", 121, 132, false],
+    ["5", "6", 446, 60, true], ["6", "7", 446, 100, true]
+  ];
+
+  function drawWorldMap(){
+    var visited = player.visited, here = mapKey(stageIndex);
+    var pw = 600, ph = 330, px = VW/2 - pw/2, py = VH/2 - ph/2;
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(0, 0, VW, VH);
+    roundRect(px, py, pw, ph, 16);
+    var bg = ctx.createLinearGradient(0, py, 0, py + ph);
+    bg.addColorStop(0, "rgba(46,34,20,0.96)");
+    bg.addColorStop(1, "rgba(24,16,10,0.96)");
+    ctx.fillStyle = bg;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(240,210,140,0.85)";
+    ctx.stroke();
+
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#f3d58e";
+    ctx.font = "14px 'Press Start 2P', monospace";
+    ctx.fillText("WORLD MAP", VW/2, py + 34);
+
+    var ox = px + (pw - 502) / 2, oy = py + 76, S = 1;
+    // doors first, under the rooms
+    MAP_DOORS.forEach(function(d){
+      if (!visited[d[0]] || !visited[d[1]]) return;
+      ctx.fillStyle = "#e9d6a6";
+      if (d[4]) ctx.fillRect(ox + d[2] - 7, oy + d[3] - 6, 14, 12);
+      else ctx.fillRect(ox + d[2] - 7, oy + d[3] - 6, 14, 12);
+    });
+    Object.keys(MAP_ROOMS).forEach(function(k){
+      if (!visited[k]) return;
+      var r = MAP_ROOMS[k], rx = ox + r.x, ry = oy + r.y;
+      var color = r.color, name = r.name;
+      if (k === "boss" && arenaFrozen){ color = "#2f6080"; name = "Frozen Spire"; }
+      roundRect(rx, ry, r.w, r.h, 5);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.lineWidth = k === here ? 3 : 1.5;
+      ctx.strokeStyle = k === here ? "rgba(255,240,190," + (0.6 + 0.4 * Math.sin(timeAlive * 0.15)).toFixed(2) + ")" : "rgba(233,214,166,0.7)";
+      ctx.stroke();
+      if (name){
+        ctx.fillStyle = "rgba(255,244,220,0.9)";
+        ctx.font = "7px 'Press Start 2P', monospace";
+        ctx.fillText(name.toUpperCase(), rx + r.w/2, ry + 14);
+      }
+    });
+
+    // you are here: a tiny player with a pulsing ring
+    var room = MAP_ROOMS[here];
+    if (room){
+      var st = STAGES[stageIndex], fx = Math.max(0.06, Math.min(0.94, (player.x + player.w/2) / WORLD_W));
+      var fy = 0.82;
+      if (st.topY) fy = Math.max(0.15, Math.min(0.9, (player.y + player.h - st.topY) / (GROUND_Y - st.topY)));
+      var mx = ox + room.x + room.w * fx, my = oy + room.y + room.h * fy;
+      var ring = (timeAlive * 0.05) % 1;
+      ctx.strokeStyle = "rgba(255,230,140," + (1 - ring).toFixed(2) + ")";
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(mx, my - 6, 6 + ring * 12, 0, Math.PI * 2); ctx.stroke();
+      var img = PLAYER_SPRITES.idle;
+      if (img && img.ready){
+        var hgt = 22, wdt = hgt * img.naturalWidth / img.naturalHeight;
+        ctx.save();
+        ctx.translate(mx, my + 4);
+        if (!SPRITE_FACES_RIGHT.idle) ctx.scale(-1, 1);
+        ctx.drawImage(img, -wdt/2, -hgt, wdt, hgt);
+        ctx.restore();
+      } else {
+        ctx.fillStyle = "#ffe08a";
+        ctx.beginPath(); ctx.arc(mx, my - 6, 4, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    ctx.fillStyle = "rgba(230,211,176,0.85)";
+    ctx.font = "8px 'Press Start 2P', monospace";
+    ctx.fillText(root.classList.contains("touch") ? "TAP THE MAP BUTTON TO CLOSE" : "PRESS M TO CLOSE", VW/2, py + ph - 18);
+    ctx.textAlign = "left";
+    ctx.restore();
+  }
+
   // ---------- Input ----------
   var keys = {};
   var WATCHED = ["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Space","KeyA","KeyD","KeyR","KeyX"];
@@ -1814,6 +2033,8 @@
     if (code === "KeyX" && gameState === "playing" && !player.superMode && score >= 4) {
       triggerSuperMode();
     }
+    if (code === "KeyM") toggleMap();
+    if (code === "Escape" && mapOpen) toggleMap();
   }
   function releaseKey(code){
     keys[code] = false;
@@ -1946,6 +2167,8 @@
   // ---------- Update ----------
   function update(dt){
     if (gameState !== "playing") return;
+    if (mapOpen) return;               // the world map pauses the game
+    updateMapItem(dt);
     timeAlive += dt;
 
     var left = keys.ArrowLeft || keys.KeyA;
@@ -2600,7 +2823,7 @@
         ctx.fillStyle = STAGES[stageIndex].tint;
         ctx.fillRect(0, 0, VW, VH);
       }
-      if (freezeT > 0 && stageIndex <= FROST_STAGE){
+      if (freezeT > 0 && stageIndex === 2){
         var c = freezeCentre();
         ctx.save();
         frostPath(c.x, c.y, freezeRadius());
@@ -3234,9 +3457,10 @@
     ctx.translate(0, -Math.round(camY));
     drawPits();
     allPlatforms.forEach(drawPlatform);
-    if (freezeT > 0 && stageIndex !== FROST_STAGE) drawFreezingLedges();
+    if (freezeT > 0 && stageIndex === 2) drawFreezingLedges();
     drawSummit();
     drawFinishGate();
+    drawMapItem();
     drawExitHints();
     enemies.forEach(drawEnemy);
     drawBoss();
@@ -3247,7 +3471,7 @@
     ctx.restore();
 
     drawSnow();
-    if (freezeT > 0 && freezeT < 1 && stageIndex !== FROST_STAGE) drawFrostRim();
+    if (freezeT > 0 && freezeT < 1 && stageIndex === 2) drawFrostRim();
 
     ctx.restore();
 
@@ -3255,7 +3479,8 @@
       drawHUD();
       drawBossBar();
     }
-    if (gameState === "playing"){ drawStageBanner(); drawAbilityCard(); }
+    if (gameState === "playing"){ drawStageBanner(); drawAbilityCard(); drawItemCard(); }
+    if (mapOpen && gameState === "playing") drawWorldMap();
   }
 
   // While the frost spreads, the new ice ledges grow inside the frozen area.
@@ -3292,7 +3517,7 @@
   // Snowfall: a stateless field of flakes driven by time, drifting with the
   // camera so climbing feels like moving through it.
   function drawSnow(){
-    var a = stageIndex === FROST_STAGE ? 1 : freezeT;
+    var a = STAGES[stageIndex].backdrop === "frost" ? 1 : stageIndex === 2 ? freezeT : 0;
     if (a <= 0) return;
     var t = timeAlive;
     ctx.save();
