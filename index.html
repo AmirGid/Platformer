@@ -994,6 +994,18 @@
   //   topY:    tall stages: the highest y the camera scrolls up to.
   //   ice:     draw ledges with the ice art. oneWay: ledges can be jumped
   //            through from below and landed on from above.
+  //   entryTop: { x, y } where you appear when dropping in from a stage above
+  //            (default: x = entryTopX or 120, just above the screen).
+  //   exitTop: { y, to } jumping up past this height goes up to stage "to",
+  //            popping up out of its drop pit at that stage's entryBelowX.
+  //   finish:  x where the Obsidian Gate stands; reaching it wins the game.
+  //
+  // Map (stage index in brackets):
+  //   [0] Moonlit Ridge = [1] Ember Hollow = [4] Ashen Woods = [5] Cinder Cliffs
+  //                            | pit                                 | pit
+  //   [8] Smoldering Den = [2] Molten Core / [3] Frozen Spire   [6] The Chute
+  //                            (E: not built yet)                    | pit
+  //                                                             [7] Obsidian Gate
   // Jump limits for laying out platforms: about 140px up, 170px across.
   var STAGES = [
     {
@@ -1014,8 +1026,9 @@
     },
     {
       name: "Ember Hollow",
-      exits: { left: 0 },
+      exits: { left: 0, right: 4 },
       dropPit: { pit: 2, to: 2 },   // the last pit (1900-2010) drops into the Molten Core
+      entryBelowX: 2040,            // where you pop up after climbing the Frozen Spire
       width: 2800,
       tint: "rgba(120,28,8,0.22)",
       ground: [[0, 620], [720, 1250], [1360, 1900], [2010, 2800]],
@@ -1055,13 +1068,15 @@
       // Not entered through an exit: the Molten Core turns into this stage
       // once the golem is dead. Same floor and width, so the swap is seamless.
       name: "Frozen Spire",
-      exits: {},
+      exits: { left: 8 },           // right: E, not built yet
       backdrop: "frost",
       ice: true,
       oneWay: true,
       width: 1300,
       topY: -2040,
-      summit: [480, -1900, 360],     // reach this ledge to win
+      summit: [480, -1900, 360],     // the way up: jump from here back up into Ember Hollow
+      exitTop: { y: -1985, to: 1 },
+      entryTop: { x: 645, y: -2110 }, // dropping back in from Ember Hollow lands on the summit
       ground: [[0, 1300]],
       platforms: [
         // first ledges sit 180-190px up: out of single-jump reach (~134px), so
@@ -1099,6 +1114,135 @@
         [[670, -970], [435, -1070], [895, -1080]],
         [[660, -1370], [410, -1470], [930, -1470]],
         [[440, -1670], [700, -1770], [950, -1670]]
+      ]
+    },
+    {
+      // B: the far end is a lava gap too wide for one jump: you need the
+      // double jump from the golem to reach Cinder Cliffs.
+      name: "Ashen Woods",
+      exits: { left: 1, right: 5 },
+      width: 2600,
+      tint: "rgba(70,70,85,0.28)",
+      ground: [[0, 700], [800, 1500], [1600, 2140], [2400, 2600]],
+      platforms: [
+        [200, 380, 140], [420, 300, 130], [640, 380, 120],
+        [880, 320, 150], [1100, 240, 140], [1300, 350, 130],
+        [1480, 290, 90],                                      // stepping stone over the 2nd pit
+        [1650, 380, 140]
+        // nothing near the last gap (2140-2400), so it really takes a double jump
+      ],
+      enemies: [
+        [300, 200, 690, 1.2, 444],
+        [950, 810, 1490, 1.5, 444],
+        [1150, 1105, 1235, 1.0, 214],  // high ledge
+        [1800, 1610, 2130, 1.4, 444],
+        [1700, 1655, 1785, 1.1, 354]   // platform
+      ]
+    },
+    {
+      // C: the last pit is a shaft down into The Chute.
+      name: "Cinder Cliffs",
+      exits: { left: 4 },
+      dropPit: { pit: 2, to: 6 },
+      entryBelowX: 2240,            // where you pop up after climbing The Chute
+      width: 2400,
+      tint: "rgba(150,40,10,0.28)",
+      ground: [[0, 560], [680, 1300], [1420, 2100], [2210, 2400]],
+      platforms: [
+        [150, 380, 130], [330, 300, 120], [540, 230, 150],
+        [760, 380, 120], [950, 300, 140], [1150, 380, 120],
+        [1330, 320, 70],                                      // stepping stone over the 2nd pit
+        [1500, 380, 130], [1700, 300, 140], [1900, 380, 130]
+      ],
+      enemies: [
+        [300, 40, 550, 1.3, 444],
+        [1000, 700, 1290, 1.6, 444],
+        [1000, 955, 1085, 1.0, 274],   // platform
+        [1700, 1430, 2090, 1.5, 444],
+        [1760, 1705, 1835, 1.0, 274]   // platform
+      ],
+      flyers: [
+        [[1550, 300], [1850, 270]]
+      ]
+    },
+    {
+      // G: a narrow shaft. You drop in from Cinder Cliffs and work your way
+      // down the ledges; the pit at the bottom drops into the Obsidian Gate.
+      // Climbing back up out of the top returns to Cinder Cliffs.
+      name: "The Chute",
+      exits: {},
+      backdrop: "cavern",
+      tint: "rgba(30,10,40,0.3)",
+      oneWay: true,
+      width: 960,
+      topY: -1300,
+      entryTop: { x: 160, y: -1360 },
+      exitTop: { y: -1330, to: 5 },
+      dropPit: { pit: 0, to: 7 },
+      ground: [[0, 380], [580, 960]],
+      platforms: [
+        [80, -1150, 200], [380, -1050, 160], [640, -950, 160],
+        [400, -850, 160], [140, -750, 160], [400, -650, 150],
+        [650, -550, 170], [420, -450, 150], [170, -350, 150],
+        [420, -250, 140], [660, -150, 160], [420, -50, 150],
+        [160, 50, 160], [400, 150, 150], [640, 250, 160],
+        [130, 360, 150]
+      ],
+      enemies: [],
+      flyers: [
+        [[300, -980], [700, -880]],
+        [[300, -480], [650, -380]],
+        [[300, 90], [650, 180]]
+      ]
+    },
+    {
+      // F: the last stretch. The Obsidian Gate at the far end is the finish.
+      name: "Obsidian Gate",
+      exits: {},
+      backdrop: "cavern",
+      tint: "rgba(70,20,110,0.28)",
+      entryTopX: 160,
+      finish: 2500,
+      width: 2600,
+      ground: [[0, 600], [720, 1200], [1320, 1900], [2040, 2600]],
+      platforms: [
+        [250, 380, 130], [430, 300, 120], [620, 230, 140],
+        [800, 380, 130], [980, 300, 120], [1150, 380, 120],
+        [1400, 380, 130], [1580, 300, 140], [1760, 230, 120],
+        [1960, 320, 60],                                      // stepping stone over the last pit
+        [2150, 380, 140]
+      ],
+      enemies: [
+        [400, 100, 590, 1.4, 444],
+        [650, 625, 755, 1.0, 204],     // high ledge
+        [1000, 730, 1190, 1.7, 444],
+        [1000, 985, 1095, 1.1, 274],   // platform
+        [1600, 1330, 1890, 1.6, 444],
+        [1640, 1585, 1715, 1.0, 274],  // platform
+        [2200, 2050, 2420, 1.7, 444]
+      ],
+      flyers: [
+        [[900, 250], [1250, 220]],
+        [[1700, 180], [2100, 250]]
+      ]
+    },
+    {
+      // D: a side cave to the left of the golem's room, open once it is dead.
+      name: "Smoldering Den",
+      exits: { right: 3 },
+      backdrop: "cavern",
+      tint: "rgba(120,50,10,0.22)",
+      width: 1800,
+      ground: [[0, 800], [920, 1800]],
+      platforms: [
+        [200, 380, 130], [380, 300, 120], [560, 230, 140],
+        [1000, 380, 130], [1200, 300, 140], [1420, 380, 130], [1580, 300, 120]
+      ],
+      enemies: [
+        [400, 40, 790, 1.3, 444],
+        [620, 565, 695, 1.0, 204],     // high ledge
+        [1300, 930, 1790, 1.6, 444],
+        [1250, 1205, 1335, 1.0, 274]   // platform
       ]
     }
   ];
@@ -1373,7 +1517,7 @@
   }
 
   function updateHeart(dt){
-    if (!heart) return;
+    if (!heart || (stageIndex !== 2 && stageIndex !== FROST_STAGE)) return;
     heart.t += dt;
     if (heart.state === "fly"){
       heart.vy += 0.45 * dt;
@@ -1430,7 +1574,7 @@
   }
 
   function drawHeart(){
-    if (!heart) return;
+    if (!heart || (stageIndex !== 2 && stageIndex !== FROST_STAGE)) return;
     var pose = heartPose(), img = HEART_SPRITES[pose.key];
     var sx = heart.x - camX;
     if (sx < -80 || sx > VW + 80) return;
@@ -1488,6 +1632,7 @@
   var explosionParticles, explosionFlash;
   var boss = null, fireballs = [], shockwaves = [];
   var freezeT = 0;   // 0..1 progress of the fire-to-frost change after the golem dies
+  var arenaFrozen = false;   // once true, the golem's room is the Frozen Spire for good
   var heart = null;  // the golem's heart once it has dropped
 
   function resetGame(){
@@ -1516,6 +1661,7 @@
     explosionParticles = [];
     explosionFlash = null;
     freezeT = 0;
+    arenaFrozen = false;
     heart = null;
     loadStage(0, "left");
     gameState = "playing";
@@ -1527,6 +1673,7 @@
   var STAGE_BANNER_TIME = 150;
   function loadStage(index, from){
     if (timeAlive > 0) SFX.play("stage");
+    if (index === 2 && arenaFrozen) index = FROST_STAGE;   // the golem's room stays frozen
     stageIndex = index;
     var stage = STAGES[index];
     WORLD_W = stage.width;
@@ -1542,8 +1689,14 @@
     player.y = GROUND_Y - player.h;
     if (from === "top"){
       // dropped down a shaft: fall in from above the screen
-      player.x = stage.entryTopX || 120;
-      player.y = -player.h - 20;
+      var et = stage.entryTop;
+      player.x = et ? et.x : (stage.entryTopX || 120);
+      player.y = et ? et.y : -player.h - 20;
+      player.facing = 1;
+    } else if (from === "below"){
+      // climbed up out of the stage below: hop up out of the drop pit
+      player.x = stage.entryBelowX || 40;
+      player.vy = -9;
       player.facing = 1;
     } else if (from === "right"){
       player.x = WORLD_W - player.w - 40;
@@ -1554,7 +1707,7 @@
     }
     player.entryX = player.x;   // where to put the player back after a lava fall
     camX = Math.max(0, Math.min(WORLD_W - VW, player.x + player.w/2 - VW/2));
-    camY = 0;
+    camY = Math.max(stage.topY || 0, Math.min(0, player.y + player.h/2 - VH * 0.6));
     stageFade = index === 0 && from === "left" && timeAlive === 0 ? 0 : 1;
     stageBannerT = STAGE_BANNER_TIME;
   }
@@ -1964,14 +2117,20 @@
     var targetY = Math.max(topY, Math.min(0, player.y + player.h/2 - VH * 0.6));
     camY += (targetY - camY) * Math.min(1, 0.12*dt);
 
-    // standing on the summit ledge of the Frozen Spire wins the game
-    var summit = STAGES[stageIndex].summit;
-    if (summit && player.onGround && Math.abs(player.y + player.h - summit[1]) < 2 &&
-        player.x + player.w > summit[0] && player.x < summit[0] + summit[2] && gameState === "playing"){
+    // jumping up out of the top of a tall stage climbs into the stage above
+    var up = STAGES[stageIndex].exitTop;
+    if (up && player.vy < 0 && player.y + player.h < up.y && gameState === "playing"){
+      loadStage(up.to, "below");
+      return;
+    }
+
+    // reaching the Obsidian Gate wins the game
+    var fin = STAGES[stageIndex].finish;
+    if (fin && player.x + player.w >= fin && gameState === "playing"){
       gameState = "win";
       var lifePct = Math.round((player.hp / player.maxHp) * 100);
       SFX.play("win");
-      showOverlay("SUMMIT REACHED!", "You shattered the Magma Golem and climbed the Frozen Spire with " + lifePct + "% of your flask still full. Time: " + Math.floor(timeAlive/60) + "s", "Play Again");
+      showOverlay("YOU ESCAPED!", "You shattered the Magma Golem, climbed the Frozen Spire and reached the Obsidian Gate with " + lifePct + "% of your flask still full. Time: " + Math.floor(timeAlive/60) + "s", "Play Again");
     }
   }
 
@@ -1981,6 +2140,7 @@
   var FROST_STAGE = 3;
   var frostPlatforms = null;
   function freezeArena(){
+    arenaFrozen = true;
     var rubble = boss;
     stageIndex = FROST_STAGE;
     var stage = STAGES[FROST_STAGE];
@@ -2436,7 +2596,11 @@
       vg2.addColorStop(1, "rgba(8,4,4,0.45)");
       ctx.fillStyle = vg2;
       ctx.fillRect(0,0,VW,VH);
-      if (freezeT > 0){
+      if (STAGES[stageIndex].tint){
+        ctx.fillStyle = STAGES[stageIndex].tint;
+        ctx.fillRect(0, 0, VW, VH);
+      }
+      if (freezeT > 0 && stageIndex <= FROST_STAGE){
         var c = freezeCentre();
         ctx.save();
         frostPath(c.x, c.y, freezeRadius());
@@ -3072,6 +3236,7 @@
     allPlatforms.forEach(drawPlatform);
     if (freezeT > 0 && stageIndex !== FROST_STAGE) drawFreezingLedges();
     drawSummit();
+    drawFinishGate();
     drawExitHints();
     enemies.forEach(drawEnemy);
     drawBoss();
@@ -3144,6 +3309,66 @@
       ctx.globalAlpha = a * (0.35 + size * 0.18);
       ctx.beginPath();
       ctx.arc(x - 30, y - 20, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // The Obsidian Gate: a black stone arch with a swirling violet portal.
+  function drawFinishGate(){
+    var fin = STAGES[stageIndex].finish;
+    if (fin === undefined) return;
+    var cx = fin + 30 - camX, base = GROUND_Y, w = 90, h = 170;
+    if (cx < -150 || cx > VW + 150) return;
+    var t = timeAlive;
+    ctx.save();
+    // glow
+    var g = ctx.createRadialGradient(cx, base - h * 0.5, 10, cx, base - h * 0.5, 170);
+    g.addColorStop(0, "rgba(190,120,255," + (0.35 + 0.1 * Math.sin(t * 0.07)).toFixed(2) + ")");
+    g.addColorStop(1, "rgba(120,40,200,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(cx - 170, base - h - 90, 340, h + 110);
+    // portal
+    ctx.beginPath();
+    ctx.moveTo(cx - w/2 + 12, base);
+    ctx.lineTo(cx - w/2 + 12, base - h + w/2);
+    ctx.arc(cx, base - h + w/2, w/2 - 12, Math.PI, 0);
+    ctx.lineTo(cx + w/2 - 12, base);
+    ctx.closePath();
+    var pg = ctx.createRadialGradient(cx, base - h * 0.45, 4, cx, base - h * 0.45, h * 0.6);
+    pg.addColorStop(0, "rgba(255,240,255,0.95)");
+    pg.addColorStop(0.35, "rgba(200,130,255,0.85)");
+    pg.addColorStop(1, "rgba(60,10,110,0.95)");
+    ctx.fillStyle = pg;
+    ctx.fill();
+    ctx.save();
+    ctx.clip();
+    ctx.strokeStyle = "rgba(255,220,255,0.35)";
+    ctx.lineWidth = 2;
+    for (var r = 0; r < 4; r++){
+      ctx.beginPath();
+      ctx.arc(cx, base - h * 0.45, 12 + r * 16 + (t * 0.6 + r * 9) % 16, t * 0.03 + r, t * 0.03 + r + 4);
+      ctx.stroke();
+    }
+    ctx.restore();
+    // stone arch
+    ctx.strokeStyle = "#1b1222";
+    ctx.lineWidth = 16;
+    ctx.beginPath();
+    ctx.moveTo(cx - w/2 + 4, base);
+    ctx.lineTo(cx - w/2 + 4, base - h + w/2);
+    ctx.arc(cx, base - h + w/2, w/2 - 4, Math.PI, 0);
+    ctx.lineTo(cx + w/2 - 4, base);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(200,140,255,0.6)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // motes drifting up out of it
+    for (var i = 0; i < 6; i++){
+      var k = (t * 0.5 + i * 7) % 40;
+      ctx.fillStyle = "rgba(230,190,255," + (1 - k / 40).toFixed(2) + ")";
+      ctx.beginPath();
+      ctx.arc(cx + Math.sin(t * 0.05 + i * 2) * 26, base - 20 - k * 4, 2, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();

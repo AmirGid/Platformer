@@ -6,17 +6,32 @@ A browser-based HTML5 canvas platformer. Move through a moonlit forest overlooki
 
 Stages are linked metroidvania style: walk off an edge or drop down a shaft to reach the next area. Imps you've killed stay dead when you return.
 
-1. **Moonlit Ridge**: solid ground and scattered rock ledges. Exit east to Ember Hollow.
-2. **Ember Hollow**: lava pits in the ground (falling in costs one flask hit and sends you back to the stage entrance), a high staircase route and more, faster imps. The last pit is a dark shaft instead of lava: drop into it to reach the Molten Core.
-3. **Molten Core**: a volcanic cavern arena with the **Magma Golem** boss (14 hits). It throws fireballs (swat them with your attack), leaps at you and sends ground shockwaves (jump them), and breathes a short flame cone. Below half health it speeds up and throws three fireballs at once. Beating it shatters the golem, flings out its still-pumping **heart** (grab it to grow your flask to 5 hits and fill it up), unlocks the **double jump** (press jump again in mid-air; once the frost settles a card with a looping demo shows how, and stays up until you've tried it) and a wave of frost turns the cavern into ice. In fire form you take no damage and touching the golem hurts it.
-4. **Frozen Spire**: the frozen cavern becomes the bottom of a tall ice shaft. Climb about 40 ice ledges (you can jump up through them from below) past winged imps that hover over the ledges, fly between them and swoop at you when you get close (they wind up first: that's your cue to swing). Reach the glowing summit ledge to win.
+```
+ Moonlit Ridge = Ember Hollow = Ashen Woods = Cinder Cliffs
+                      | shaft                     | shaft
+ Smoldering Den = Molten Core /              The Chute
+                  Frozen Spire                    | shaft
+                                             Obsidian Gate (finish)
+```
+
+The route: Ember Hollow, down into the golem's room, beat it, climb the Frozen Spire back up into Ember Hollow, then east through Ashen Woods (needs the double jump) and Cinder Cliffs, down The Chute to the Obsidian Gate.
+
+1. **Moonlit Ridge** (start): solid ground and scattered rock ledges. Exit east to Ember Hollow.
+2. **Ember Hollow**: lava pits in the ground (falling in costs one flask hit and sends you back to the stage entrance), a high staircase route and more, faster imps. The last pit is a dark shaft instead of lava: drop into it to reach the Molten Core. Exit east to Ashen Woods.
+3. **Molten Core**: a volcanic cavern arena with the **Magma Golem** boss (14 hits). It throws fireballs (swat them with your attack), leaps at you and sends ground shockwaves (jump them), and breathes fire. Below half health it speeds up and throws three fireballs at once. Beating it shatters the golem, flings out its still-pumping **heart** (grab it to grow your flask to 5 hits and fill it up), unlocks the **double jump** (press jump again in mid-air; once the frost settles a card with a looping demo shows how, and stays up until you've tried it) and a wave of frost turns the cavern into ice for good. In fire form you take no damage and touching the golem hurts it.
+4. **Frozen Spire**: the frozen cavern becomes the bottom of a tall ice shaft. Climb about 40 ice ledges (you can jump up through them from below) past winged imps that hover over the ledges, fly between them and swoop at you when you get close. Jump up from the glowing summit to climb back out into Ember Hollow. Its west side opens into the Smoldering Den (the east side, E on the map, is not built yet).
+5. **Ashen Woods**: grey forest east of Ember Hollow. Its last lava gap is too wide for one jump: you need the golem's double jump to reach Cinder Cliffs.
+6. **Cinder Cliffs**: red-lit cliffs with winged imps; the last pit is a shaft down into The Chute.
+7. **The Chute**: a narrow, tall shaft. Work your way down the ledges past winged imps; the pit at the bottom drops into the Obsidian Gate. Double-jump up out of the top to go back to Cinder Cliffs.
+8. **Obsidian Gate** (finish): the last gauntlet of pits and fast imps. Reach the glowing gate at the far end to win.
+9. **Smoldering Den**: an optional side cave west of the golem's room.
 
 Stages are defined in the `STAGES` list in `index.html`; add another entry to add a stage.
 
 
 ## Sound
 
-Background music and the start laugh are recorded files. All other sound effects are synthesized in the browser (Web Audio API), so they need no files: sword swings, imp deaths, getting hurt, lava, jumps and the icy double jump, fire form, stage changes, the golem's roar, fireballs, leap, ground slam, flame breath, stone-crack hits, death and explosion, the heart's splat and distance-based heartbeat, the frost wave, the ability chime, the winged imps' screech, game over and the summit fanfare.
+Background music and the start laugh are recorded files. All other sound effects are synthesized in the browser (Web Audio API), so they need no files: sword swings, imp deaths, getting hurt, lava, jumps and the icy double jump, fire form, stage changes, the golem's roar, fireballs, leap, ground slam, flame breath, stone-crack hits, death and explosion, the heart's splat and distance-based heartbeat, the frost wave, the ability chime, the winged imps' screech, game over and the victory fanfare.
 
 The golem's roar and death can use recorded files instead: set their paths in `SFX_FILES` in `index.html` and they replace the synthesized versions once loaded.
 
