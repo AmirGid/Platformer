@@ -127,6 +127,9 @@
     font-size:16px; line-height:32px; cursor:pointer; color:#fff;
   }
   .mutebtn:hover{ background:rgba(40,20,20,0.75); }
+  /* TESTING ONLY: god mode toggle, remove for the final version */
+  .godbtn{ right:calc(12.5% + 42px); font:bold 10px/32px 'IBM Plex Mono', monospace; letter-spacing:0.5px; }
+  .godbtn.on{ background:rgba(230,170,40,0.9); color:#1a0e00; border-color:#ffe08a; box-shadow:0 0 10px rgba(255,200,80,0.8); }
   #game{
     display:block;
     width:100%;
@@ -402,6 +405,8 @@
     <div class="stage">
       <canvas id="game" width="960" height="540" tabindex="0" aria-label="Demonic Flame game canvas"></canvas>
       <button class="mutebtn" id="muteBtn" type="button" aria-label="Mute sound"></button>
+      <!-- TESTING ONLY: god mode toggle, remove for the final version -->
+      <button class="mutebtn godbtn" id="godBtn" type="button" aria-label="Toggle god mode">GOD</button>
       <div class="overlay" id="overlay">
         <div class="panel">
           <h2 id="overlayTitle">DEMONIC FLAME</h2>
@@ -691,6 +696,20 @@
     document.addEventListener("keydown", function(e){ if (e.code === "KeyM"){ SFX.init(); SFX.setMuted(!SFX.isMuted()); sync(); } });
   })();
 
+  // TESTING ONLY: god mode (button or G key) - nothing can hurt you. Remove
+  // for the final version (this block, the #godBtn button and its CSS, and
+  // the godMode checks in the damage code).
+  var godMode = false;
+  try { godMode = localStorage.getItem("df_god") === "1"; } catch(e){}
+  (function(){
+    var btn = document.getElementById("godBtn");
+    function sync(){ btn.classList.toggle("on", godMode); btn.setAttribute("aria-pressed", godMode ? "true" : "false"); }
+    function toggle(){ godMode = !godMode; try { localStorage.setItem("df_god", godMode ? "1" : "0"); } catch(e){} sync(); }
+    sync();
+    btn.addEventListener("click", function(e){ e.stopPropagation(); toggle(); btn.blur(); });
+    document.addEventListener("keydown", function(e){ if (e.code === "KeyG") toggle(); });
+  })();
+
   // ---------- Backdrop art (moonlit forest overlooking the city) ----------
   var bgImg = new Image();
   var bgReady = false;
@@ -739,6 +758,30 @@
   // Magma Golem boss sprites. All poses face RIGHT natively. anchor = [x of the
   // body centre, height] in source pixels, so frames line up at the feet.
   var BOSS_SCALE = 0.6;
+  // The breath art is split in two at load: the golem (everything left of
+  // the jaw, plus its forward arm) and the flame with its fiery burst, so the
+  // flame can grow out of the mouth when the attack starts and fade at the end.
+  var BREATH_SPLIT = 240;                  // jaw column in boss_breath.png
+  var BREATH_ARM = [[240,135],[300,143],[330,145],[350,150],[352,170],[340,190],[300,186],[260,194],[240,196]];
+  function buildBreathLayers(im){
+    var W = im.naturalWidth, H = im.naturalHeight;
+    function flameRegion(g){
+      g.beginPath();
+      g.rect(BREATH_SPLIT, 0, W - BREATH_SPLIT, H);
+      BREATH_ARM.forEach(function(pt, i){ if (i) g.lineTo(pt[0], pt[1]); else g.moveTo(pt[0], pt[1]); });
+      g.closePath();
+    }
+    function layer(op){
+      var c = document.createElement("canvas"); c.width = W; c.height = H;
+      var g = c.getContext("2d");
+      g.drawImage(im, 0, 0);
+      g.globalCompositeOperation = op;
+      flameRegion(g); g.fill("evenodd");
+      return c;
+    }
+    im.body = layer("destination-out");
+    im.flame = layer("destination-in");
+  }
   var BOSS_SPRITES = {};
   (function(){
     var anchors = {
@@ -750,8 +793,11 @@
     Object.keys(anchors).forEach(function(key){
       var im = new Image();
       im.ready = false;
-      im.onload = function(){ im.ready = true; };
-      im.src = "assets/boss_" + key + ".png";
+      im.onload = function(){
+        if (key === "breath") buildBreathLayers(im);
+        im.ready = true;
+      };
+      im.src = "assets/boss_" + key + ".png" + (key === "breath" ? "?v=3" : "");
       im.anchorX = anchors[key][0];
       BOSS_SPRITES[key] = im;
     });
@@ -824,6 +870,9 @@
   rockImg.onload = function(){ rockImg.ready = true; };
   rockImg.src = "assets/rock.png";
   var ROCK_TILE_H = 70; // fixed render height for one repeated rock chunk
+  // rock.png columns: art spans ROCK_ENDS; ROCK_MID is the full-height middle
+  // that repeats along the ground (the parts outside it taper)
+  var ROCK_ENDS = [85, 618], ROCK_MID = [160, 560];
 
   // Player character sprites (shadow-creature artwork). The art faces LEFT natively;
   // we mirror it when the player faces right. Draw size = naturalWidth/2, naturalHeight/2
@@ -1354,6 +1403,9 @@
     if (gameState === "playing" && intersects(player, heartBox())){
       heart.state = "taken"; heart.t = 0;
       SFX.play("heal");
+      if (!player.bigFlask){            // the golem's heart deepens the flask to 5 hits
+        player.bigFlask = true; player.flaskGrowT = 0; player.maxHp = 5;
+      }
       player.hp = player.maxHp;
       player.invuln = Math.max(player.invuln, 30);
       shake = Math.max(shake, 8);
@@ -1444,7 +1496,8 @@
       facing: 1, onGround:false, hp: 4, maxHp:4,
       invuln:0, attackT:0, attackCd:0, walkCycle:0,
       superMode:false, superTimer:0,
-      canDoubleJump:false, airJumpUsed:false, upHeld:false, doubleJumps:0
+      canDoubleJump:false, airJumpUsed:false, upHeld:false, doubleJumps:0,
+      bigFlask:false, flaskGrowT:0, fillShown:1
     };
     abilityCard = null;
     stageState = STAGES.map(function(s){
@@ -1801,7 +1854,7 @@
     // Fell into a lava pit: lose one flask hit and go back to where you
     // entered this stage.
     if (player.y > VH + 40){
-      player.hp -= 1;
+      if (!godMode) player.hp -= 1;
       shake = 12;
       SFX.play("sizzle");
       if (player.hp <= 0){
@@ -1884,7 +1937,7 @@
         score += 1;
         shake = 6;
         SFX.play("impDie");
-      } else if (player.invuln <= 0 && intersects(player, en)){
+      } else if (!godMode && player.invuln <= 0 && intersects(player, en)){
         player.hp -= 1;
         player.invuln = 65;
         shake = 10;
@@ -1901,6 +1954,7 @@
 
     if (boss && gameState === "playing") updateBoss(dt, hitbox);
     updateHeart(dt);
+    updateFlask(dt);
 
     var targetCam = player.x + player.w/2 - VW/2;
     targetCam = Math.max(0, Math.min(WORLD_W - VW, targetCam));
@@ -1941,7 +1995,7 @@
 
   // Shared "player got hit" handling for the boss and its attacks.
   function hurtPlayer(fromX, deathText){
-    if (player.invuln > 0 || player.superMode) return;
+    if (godMode || player.invuln > 0 || player.superMode) return;
     SFX.play("hurt");
     player.hp -= 1;
     player.invuln = 65;
@@ -1981,15 +2035,35 @@
 
   function bossBox(b){ return rect(b.x - b.w/2, b.y - b.h, b.w, b.h); }
 
-  // Mouth position and breath cone, shared by update and draw.
-  function bossMouth(b){ return { x: b.x + b.facing * 30, y: b.y - 134 }; }
-  var BREATH_LEN = 290;
+  // Breath flame geometry, traced from boss_breath.png (source pixels): a
+  // narrow jet out of the mouth that opens into a big burst. The whole flame
+  // is tilted down BREATH_TILT around the jaw (shape unchanged) so the burst
+  // reaches the floor. reach (0..1) is how far the flame has grown out.
+  var BREATH_END = 560;                    // last column of the burst
+  var BREATH_PIVOT = [240, 118];           // jaw, where the flame leaves the mouth
+  var BREATH_TILT = 12 * Math.PI / 180;
+  function breathAt(col){
+    var t = Math.max(0, (col - BREATH_SPLIT) / (BREATH_END - BREATH_SPLIT));
+    return { row: 118 + 52 * t, half: 22 + 100 * Math.pow(t, 1.5) };
+  }
+  function breathReach(b){ return Math.min(1, (b.t - 30) / 12); }
   function inBreath(b, box){
-    var m = bossMouth(b);
-    var dx = (box.x + box.w/2 - m.x) * b.facing;
-    if (dx < 10 || dx > BREATH_LEN) return false;
-    var cy = m.y + dx * 0.45, hh = 14 + dx * 0.13;
-    return box.y < cy + hh && box.y + box.h > cy - hh;
+    var im = BOSS_SPRITES.breath, S = BOSS_SCALE, H = im.naturalHeight || 328;
+    var last = BREATH_SPLIT + (BREATH_END - BREATH_SPLIT) * breathReach(b);
+    var c0 = Math.cos(BREATH_TILT), s0 = Math.sin(BREATH_TILT);
+    // test a few points of the box, mapped back into the untilted art
+    var pts = [[0.5, 0], [0.5, 0.5], [0.5, 1], [0, 0], [1, 0], [0, 0.6], [1, 0.6]];
+    for (var i = 0; i < pts.length; i++){
+      var wx = box.x + box.w * pts[i][0], wy = box.y + box.h * pts[i][1];
+      var dx = im.anchorX + (wx - b.x) * b.facing / S - BREATH_PIVOT[0];
+      var dy = (wy - b.y) / S + H - BREATH_PIVOT[1];
+      var col = BREATH_PIVOT[0] + dx * c0 + dy * s0;
+      var row = BREATH_PIVOT[1] - dx * s0 + dy * c0;
+      if (col < 215 || col > last) continue;
+      var c = breathAt(col);
+      if (Math.abs(row - c.row) < c.half) return true;
+    }
+    return false;
   }
 
   var BOSS_STATE_SOUNDS = { intro: "roar", air: "leap", land: "slam", breath: "breath" };
@@ -2204,7 +2278,7 @@
       ctx.translate(sx + shudder, b.y);
       if (b.facing < 0) ctx.scale(-1, 1);
       if (b.hitFlash > 0) ctx.filter = "brightness(2.2) saturate(0.6)";
-      ctx.drawImage(img, -img.anchorX * S, -img.naturalHeight * S, img.naturalWidth * S, img.naturalHeight * S);
+      ctx.drawImage(img.body || img, -img.anchorX * S, -img.naturalHeight * S, img.naturalWidth * S, img.naturalHeight * S);
     } else {
       ctx.fillStyle = "#3a1a10";
       ctx.fillRect(sx - b.w/2, b.y - b.h, b.w, b.h);
@@ -2215,22 +2289,23 @@
   }
 
   function drawBreath(b){
-    var m = bossMouth(b);
-    var grow = Math.min(1, (b.t - 30) / 10) * Math.min(1, (100 - b.t) / 10 + 0.2);
-    var len = BREATH_LEN * grow;
+    var im = BOSS_SPRITES.breath;
+    if (!im.ready || !im.flame) return;
+    var S = BOSS_SCALE, H = im.naturalHeight, W = im.naturalWidth;
+    var reach = breathReach(b);
+    var jaw = (BREATH_PIVOT[0] - im.anchorX) * S, jawY = (BREATH_PIVOT[1] - H) * S;
     ctx.save();
-    ctx.globalCompositeOperation = "lighter";
-    for (var i = 0; i < 26; i++){
-      var dx = (i / 26) * len + Math.random() * 10;
-      var cx = m.x + b.facing * dx - camX, cy = m.y + dx * 0.45 + (Math.random()-0.5) * dx * 0.12;
-      var r = 8 + dx * 0.13;
-      var g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-      var heat = 1 - dx / BREATH_LEN;
-      g.addColorStop(0, "rgba(255," + Math.round(200 + 55*heat) + "," + Math.round(120*heat) + ",0.55)");
-      g.addColorStop(1, "rgba(255,80,10,0)");
-      ctx.fillStyle = g;
-      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
-    }
+    ctx.translate(b.x - camX, b.y);
+    if (b.facing < 0) ctx.scale(-1, 1);
+    ctx.translate(jaw, jawY); ctx.rotate(BREATH_TILT); ctx.translate(-jaw, -jawY);
+    // grows out of the jaw (stretched from it, no hard edge), fades at the end
+    ctx.globalAlpha = Math.min(1, (100 - b.t) / 10 + 0.1, 0.4 + reach);
+    var grow = 0.15 + 0.85 * (1 - Math.pow(1 - reach, 2));
+    var flick = 1 + Math.sin(b.t * 0.9) * 0.012;
+    ctx.translate(jaw, 0);
+    ctx.scale(grow * flick, 1);
+    ctx.translate(-jaw, 0);
+    ctx.drawImage(im.flame, -im.anchorX * S, -H * S, W * S, H * S);
     ctx.restore();
   }
 
@@ -2443,16 +2518,30 @@
       var h = p.w / aspect;
       ctx.drawImage(rockImg, sx, p.y, p.w, h);
     } else {
-      // wide platform (e.g. the ground): repeat the chunk at a fixed scale, clip the last tile
-      var x = sx;
-      var remaining = p.w;
-      while (remaining > 0){
-        var drawW = Math.min(tileW, remaining);
-        var srcCropW = (drawW / tileW) * srcW;
-        ctx.drawImage(rockImg, 0, 0, srcCropW, srcH, x, p.y, drawW, ROCK_TILE_H);
-        x += drawW;
-        remaining -= drawW;
+      // wide platform (the ground): repeat only the solid middle of the chunk,
+      // mirroring every other tile so each seam meets an identical edge, and
+      // put the rounded ends only where the ground piece really ends.
+      var k = ROCK_TILE_H / srcH;
+      var m0 = ROCK_MID[0], m1 = ROCK_MID[1], midW = (m1 - m0) * k;
+      var capL = (m0 - ROCK_ENDS[0]) * k, capR = (ROCK_ENDS[1] - m1) * k;
+      var x0 = sx + capL - 1, x1 = sx + p.w - capR + 1;
+      for (var i = 0, x = x0; x < x1; i++, x += midW){
+        if (x + midW < 0){ continue; }
+        if (x > VW) break;
+        var dw = Math.min(midW, x1 - x), cw = dw / k;
+        if (i % 2 === 0){
+          ctx.drawImage(rockImg, m0, 0, cw, srcH, x, p.y, dw, ROCK_TILE_H);
+        } else {
+          ctx.save();
+          ctx.translate(x + dw, p.y);
+          ctx.scale(-1, 1);
+          ctx.drawImage(rockImg, m1 - cw, 0, cw, srcH, 0, 0, dw, ROCK_TILE_H);
+          ctx.restore();
+        }
       }
+      // end pieces overlap the middle a little to hide the cut
+      ctx.drawImage(rockImg, ROCK_ENDS[0], 0, m0 - ROCK_ENDS[0] + 6, srcH, sx, p.y, capL + 6 * k, ROCK_TILE_H);
+      ctx.drawImage(rockImg, m1 - 6, 0, ROCK_ENDS[1] - m1 + 6, srcH, sx + p.w - capR - 6 * k, p.y, capR + 6 * k, ROCK_TILE_H);
     }
   }
 
@@ -2777,25 +2866,178 @@
     ctx.closePath();
   }
 
+  // After the golem's heart is taken the flask holds 5 hits and grows taller.
+  // The tall flask is built from the empty art: a plain band of the glass
+  // tube is stretched, and the liquid is painted onto the glass pixels only
+  // (so the bone, scale marks and roots stay in front), cut at any level.
+  var FLASK_BAND = [88, 96];        // source rows of plain tube that stretch
+  var FLASK_EXTRA = 56;             // extra source rows once fully grown
+  var FLASK_FULL_Y = 74, FLASK_EMPTY_Y = 192;   // liquid top when full / empty
+  var FLASK_TUBE = [46, 102];       // inside of the tube, source x
+  var FLASK_GROW = 50;              // frames for the flask to stretch
+  var flaskLayers = null;           // { body, top } liquid canvases
+
+  function updateFlask(dt){
+    var p = player;
+    if (p.bigFlask && p.flaskGrowT < FLASK_GROW + 200) p.flaskGrowT += dt;
+    var target = Math.max(0, p.hp / p.maxHp);
+    if (p.bigFlask && p.flaskGrowT < FLASK_GROW) return;   // grow first, then fill
+    var rate = target > p.fillShown ? 0.011 : 0.03;
+    if (p.fillShown < target) p.fillShown = Math.min(target, p.fillShown + rate * dt);
+    else p.fillShown = Math.max(target, p.fillShown - rate * dt);
+  }
+
+  function buildFlaskLayers(){
+    var empty = FLASK_IMAGES[0], full = FLASK_IMAGES[4];
+    var W = empty.naturalWidth, H = empty.naturalHeight;
+    function pixels(im){
+      var c = document.createElement("canvas"); c.width = W; c.height = H;
+      var g = c.getContext("2d"); g.drawImage(im, 0, 0);
+      return g.getImageData(0, 0, W, H);
+    }
+    var e = pixels(empty), f = pixels(full).data, ed = e.data;
+    // liquid colour per column, taken from the full flask's blood
+    var cols = [];
+    for (var x = 0; x < W; x++){
+      var r = 0, g = 0, b = 0, n = 0;
+      for (var y = 86; y < 150; y++){
+        var i = (y * W + x) * 4;
+        if (f[i+3] > 200 && f[i] > 60 && f[i] > f[i+1] * 2.2 && f[i] > f[i+2] * 1.7){ r += f[i]; g += f[i+1]; b += f[i+2]; n++; }
+      }
+      cols.push(n ? [r/n, g/n, b/n] : null);
+    }
+    function layer(lighten){
+      var c = document.createElement("canvas"); c.width = W; c.height = H;
+      var g = c.getContext("2d"), out = g.createImageData(W, H), od = out.data;
+      for (var y = 60; y < H; y++){
+        for (var x = FLASK_TUBE[0]; x <= FLASK_TUBE[1]; x++){
+          var i = (y * W + x) * 4, col = cols[x];
+          if (!col || ed[i+3] < 200) continue;
+          var R = ed[i], G = ed[i+1], B = ed[i+2];
+          var mx = Math.max(R, G, B), mn = Math.min(R, G, B);
+          if (B < R - 4 || R + G + B < 300 || mx - mn > 60) continue;   // glass only
+          var shade = Math.max(0.85, Math.min(1.15, (R + G + B) / 645));
+          od[i]   = Math.min(255, col[0] * shade * lighten + (lighten > 1 ? 28 : 0));
+          od[i+1] = Math.min(255, col[1] * shade * lighten);
+          od[i+2] = Math.min(255, col[2] * shade * lighten + (lighten > 1 ? 6 : 0));
+          od[i+3] = 255;
+        }
+      }
+      g.putImageData(out, 0, 0);
+      return c;
+    }
+    flaskLayers = { body: layer(1), top: layer(1.45) };
+  }
+
+  // Draw a flask-sized image with the tube band stretched by `extra` rows.
+  function drawStretched(im, x, y, k, extra){
+    var W = FLASK_IMAGES[0].naturalWidth, H = FLASK_IMAGES[0].naturalHeight;
+    var b0 = FLASK_BAND[0], b1 = FLASK_BAND[1];
+    ctx.drawImage(im, 0, 0, W, b0, x, y, W * k, b0 * k + 0.5);
+    ctx.drawImage(im, 0, b0, W, b1 - b0, x, y + b0 * k, W * k, (b1 - b0 + extra) * k + 0.5);
+    ctx.drawImage(im, 0, b1, W, H - b1, x, y + (b1 + extra) * k, W * k, (H - b1) * k);
+  }
+
   function drawLifeFlask(){
     var backX = 16, backY = 10, dispH = 138, padX = 16, padTop = 8, padBottom = 20;
-    var level = Math.max(0, Math.min(4, Math.round(player.hp)));
-    var img = FLASK_IMAGES[level];
+    var p = player;
+    var level = Math.max(0, Math.min(p.maxHp, Math.round(p.hp)));
+    var img = FLASK_IMAGES[Math.min(4, level)];
+    var empty = FLASK_IMAGES[0], full = FLASK_IMAGES[4];
 
-    if (img && img.ready){
+    if (p.bigFlask && empty.ready && full.ready){
+      if (!flaskLayers) buildFlaskLayers();
+      var W = empty.naturalWidth, H = empty.naturalHeight, k = dispH / H;
+      var g = Math.min(1, p.flaskGrowT / FLASK_GROW);
+      // ease out with a little overshoot, like glass being drawn out
+      var ease = 1 + 2.2 * Math.pow(g - 1, 3) + 1.2 * Math.pow(g - 1, 2);
+      var extra = FLASK_EXTRA * ease;
+      var dispW = W * k, boxH = (H + extra) * k + padTop + padBottom;
+      var growing = p.flaskGrowT < FLASK_GROW + 60;
+
+      ctx.save();
+      if (growing){
+        var glow = Math.max(0, 1 - Math.max(0, p.flaskGrowT - FLASK_GROW) / 60);
+        ctx.shadowColor = "rgba(255,60,60," + (0.9 * glow).toFixed(2) + ")";
+        ctx.shadowBlur = 22 * glow;
+      }
+      ctx.fillStyle = "rgba(10,8,14,0.5)";
+      roundRect(backX, backY, dispW + padX*2, boxH, 12);
+      ctx.fill();
+      ctx.restore();
+
+      var shake2 = p.invuln > 0 && Math.floor(p.invuln/4)%2===0 ? 3 : 0;
+      var fx = backX + padX + shake2, fy = backY + padTop;
+      ctx.save();
+      if (p.flaskGrowT < FLASK_GROW){
+        // the glass wobbles thinner as it stretches
+        var squeeze = 1 - 0.06 * Math.sin(g * Math.PI);
+        ctx.translate(fx + dispW/2, 0); ctx.scale(squeeze, 1); ctx.translate(-(fx + dispW/2), 0);
+      }
+      drawStretched(empty, fx, fy, k, extra);
+
+      // liquid: level in stretched source rows, then mapped to the screen
+      var fill = Math.max(0, Math.min(1, p.fillShown));
+      if (fill > 0.001){
+        var bottom = FLASK_EMPTY_Y + extra;
+        var ly = fy + (bottom - (bottom - FLASK_FULL_Y) * fill) * k;
+        var cx = fx + (FLASK_TUBE[0] + FLASK_TUBE[1]) / 2 * k;
+        var rx = (FLASK_TUBE[1] - FLASK_TUBE[0]) / 2 * k + 1, ry = 3.2;
+        // a slight slosh while the level is moving
+        var moving = Math.abs(fill - Math.max(0, p.hp / p.maxHp)) > 0.002;
+        var tilt = moving ? Math.sin(timeAlive * 0.35) * 0.06 : 0;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(fx - 4, ly, dispW + 8, fy + (H + extra) * k - ly);
+        ctx.ellipse(cx, ly, rx, ry, tilt, 0, Math.PI * 2);
+        ctx.clip();
+        drawStretched(flaskLayers.body, fx, fy, k, extra);
+        ctx.restore();
+        ctx.save();
+        ctx.beginPath();
+        ctx.ellipse(cx, ly, rx, ry, tilt, 0, Math.PI * 2);
+        ctx.clip();
+        drawStretched(flaskLayers.top, fx, fy, k, extra);
+        ctx.restore();
+        // roots and the bottom of the blood come from the full art (the empty
+        // art has pale glass showing between its roots)
+        var r0 = FLASK_EMPTY_Y;
+        ctx.drawImage(full, 0, r0, W, H - r0, fx, fy + (r0 + extra) * k, W * k, (H - r0) * k);
+      }
+      ctx.restore();
+
+      // sparkles running up the new glass while it grows
+      if (growing){
+        for (var s = 0; s < 6; s++){
+          var t = (p.flaskGrowT * 0.04 + s / 6) % 1;
+          var a = Math.max(0, 1 - Math.max(0, p.flaskGrowT - FLASK_GROW) / 60) * Math.sin(t * Math.PI);
+          var sx = fx + dispW * (0.3 + 0.45 * ((s * 37) % 10) / 10);
+          var sy = fy + (H + extra) * k * (0.8 - 0.6 * t);
+          ctx.fillStyle = "rgba(255,190,190," + (0.85 * a).toFixed(2) + ")";
+          ctx.beginPath(); ctx.arc(sx, sy, 1.8, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 12px 'IBM Plex Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText(level + " / " + p.maxHp, backX + padX + dispW/2, backY + boxH - 5);
+      ctx.textAlign = "left";
+    } else if (img && img.ready){
       var dispW = dispH * (img.naturalWidth / img.naturalHeight);
       ctx.fillStyle = "rgba(10,8,14,0.5)";
       roundRect(backX, backY, dispW + padX*2, dispH + padTop + padBottom, 12);
       ctx.fill();
 
-      var shake2 = player.invuln > 0 && Math.floor(player.invuln/4)%2===0 ? 3 : 0;
+      var shake2 = p.invuln > 0 && Math.floor(p.invuln/4)%2===0 ? 3 : 0;
       ctx.drawImage(img, backX + padX + shake2, backY + padTop, dispW, dispH);
 
       ctx.fillStyle = "#ffffff";
       ctx.font = "bold 12px 'IBM Plex Mono', monospace";
       ctx.textAlign = "center";
       ctx.textBaseline = "alphabetic";
-      ctx.fillText(level + " / 4", backX + padX + dispW/2, backY + padTop + dispH + 15);
+      ctx.fillText(level + " / " + p.maxHp, backX + padX + dispW/2, backY + padTop + dispH + 15);
       ctx.textAlign = "left";
     } else {
       // simple fallback bar while the flask art decodes
@@ -2806,7 +3048,7 @@
       ctx.fillStyle = "#241b1b";
       roundRect(barX, barY, barW, barH, 5);
       ctx.fill();
-      var pct = Math.max(0, player.hp / player.maxHp);
+      var pct = Math.max(0, p.hp / p.maxHp);
       ctx.fillStyle = "#c9382a";
       roundRect(barX+2, barY+2, Math.max(0,(barW-4)*pct), barH-4, 4);
       ctx.fill();

@@ -8,7 +8,7 @@ Stages are linked metroidvania style: walk off an edge or drop down a shaft to r
 
 1. **Moonlit Ridge**: solid ground and scattered rock ledges. Exit east to Ember Hollow.
 2. **Ember Hollow**: lava pits in the ground (falling in costs one flask hit and sends you back to the stage entrance), a high staircase route and more, faster imps. The last pit is a dark shaft instead of lava: drop into it to reach the Molten Core.
-3. **Molten Core**: a volcanic cavern arena with the **Magma Golem** boss (14 hits). It throws fireballs (swat them with your attack), leaps at you and sends ground shockwaves (jump them), and breathes a short flame cone. Below half health it speeds up and throws three fireballs at once. Beating it shatters the golem, flings out its still-pumping **heart** (grab it to refill your whole flask), unlocks the **double jump** (press jump again in mid-air; once the frost settles a card with a looping demo shows how, and stays up until you've tried it) and a wave of frost turns the cavern into ice. In fire form you take no damage and touching the golem hurts it.
+3. **Molten Core**: a volcanic cavern arena with the **Magma Golem** boss (14 hits). It throws fireballs (swat them with your attack), leaps at you and sends ground shockwaves (jump them), and breathes a short flame cone. Below half health it speeds up and throws three fireballs at once. Beating it shatters the golem, flings out its still-pumping **heart** (grab it to grow your flask to 5 hits and fill it up), unlocks the **double jump** (press jump again in mid-air; once the frost settles a card with a looping demo shows how, and stays up until you've tried it) and a wave of frost turns the cavern into ice. In fire form you take no damage and touching the golem hurts it.
 4. **Frozen Spire**: the frozen cavern becomes the bottom of a tall ice shaft. Climb about 40 ice ledges (you can jump up through them from below) past winged imps that hover over the ledges, fly between them and swoop at you when you get close (they wind up first: that's your cue to swing). Reach the glowing summit ledge to win.
 
 Stages are defined in the `STAGES` list in `index.html`; add another entry to add a stage.
@@ -65,7 +65,7 @@ assets/          all sprite sheets, art, and audio referenced by index.html
 | `heart_*.png` | The golem's heart: beating, dripping, spinning, landing and bursting frames |
 | `flyer_*.png` | Winged imp frames (hover, fly, dive; 4 each), cut from a sprite sheet; all face right |
 | `rock.png` | Tiled platform/lava-rock art |
-| `flask_0.png`–`flask_4.png` | Life flask HUD, indexed by hits remaining (0 = empty, 4 = full) |
+| `flask_0.png`–`flask_4.png` | Life flask HUD, indexed by hits remaining (0 = empty, 4 = full). After the heart, the taller 5-hit flask is built in code from `flask_0` and `flask_4` |
 | `torch_0.png`–`torch_5.png` | Imp-kill-count HUD torch, indexed by progressive ignition state (score 0 already shows the first ember) |
 | `bgmusic.mp3` | Background music, starts on load |
 | `sfx_laugh.mp3` | Evil-laugh sound effect, played on pressing Start |
