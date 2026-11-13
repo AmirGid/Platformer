@@ -36,6 +36,9 @@ Background music and the start laugh are recorded files. All other sound effects
 The golem's roar and death can use recorded files instead: set their paths in `SFX_FILES` in `index.html` and they replace the synthesized versions once loaded.
 
 Press **N** or tap the speaker button to mute; the choice is remembered on that device. Sound starts after the first tap or key press (browsers require a user gesture).
+
+Press **P** or **Esc** (or tap the pause button) to pause. The pause menu has music and sound-effect volume sliders, a vibration switch (Android phones; iPhones don't support web vibration) and a restart button. The game also pauses itself when you switch away from it.
+
 ## Running it
 
 No build step — it's a static page. Either:

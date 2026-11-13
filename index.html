@@ -128,6 +128,18 @@
   }
   .mutebtn:hover{ background:rgba(40,20,20,0.75); }
   .mapbtn{ right:calc(12.5% + 84px); }
+  .pausebtn{ right:calc(12.5% - 42px); font:bold 12px/32px 'IBM Plex Mono', monospace; letter-spacing:-1px; }
+  html.menu .pausebtn{ display:none; }
+  html.paused .touchpad{ visibility:hidden; }
+  .pausepanel .setting{ display:flex; align-items:center; justify-content:space-between; gap:14px; margin:0 0 14px; color:#e6d3b0; font-size:13px; text-align:left; }
+  .pausepanel .setting[hidden]{ display:none; }
+  .pausepanel input[type=range]{ flex:1; max-width:190px; accent-color:#ff7a1f; }
+  .pausepanel input[type=checkbox]{ width:20px; height:20px; margin:0; accent-color:#ff7a1f; }
+  .pausepanel .actions{ display:flex; flex-direction:column; gap:12px; align-items:center; margin-top:18px; }
+  button.textbtn{ background:none; border:1px solid #5a2a14; color:#cba58a; font:12px 'IBM Plex Mono', monospace; padding:9px 16px; border-radius:6px; cursor:pointer; }
+  button.textbtn:hover{ color:#ffdcb0; border-color:#a0461c; }
+  button.textbtn.armed{ color:#ffb27a; border-color:#ff7a1f; }
+  .pausepanel .hint{ font-size:11px; color:#8a6a55; margin:14px 0 0; }
   .mapbtn[hidden]{ display:none; }
   /* TESTING ONLY: god mode toggle, remove for the final version */
   .godbtn{ right:calc(12.5% + 42px); font:bold 10px/32px 'IBM Plex Mono', monospace; letter-spacing:0.5px; }
@@ -384,6 +396,9 @@
     .panel h2{ font-size:13px; margin-bottom:10px; }
     .panel p{ font-size:12px; line-height:1.5; margin-bottom:12px; }
     button.playbtn{ font-size:11px; padding:11px 16px; }
+    .pausepanel .setting{ margin-bottom:8px; font-size:12px; }
+    .pausepanel .actions{ margin-top:10px; gap:8px; }
+    .pausepanel .hint{ display:none; }
   }
   @media (max-width:420px){
     .tbtn{ width:64px; height:64px; font-size:22px; }
@@ -409,12 +424,26 @@
       <button class="mutebtn" id="muteBtn" type="button" aria-label="Mute sound"></button>
       <!-- TESTING ONLY: god mode toggle, remove for the final version -->
       <button class="mutebtn godbtn" id="godBtn" type="button" aria-label="Toggle god mode">GOD</button>
+      <button class="mutebtn pausebtn" id="pauseBtn" type="button" aria-label="Pause">&#10074;&#10074;</button>
       <button class="mutebtn mapbtn" id="mapBtn" type="button" aria-label="World map" hidden>&#128506;</button>
       <div class="overlay" id="overlay">
         <div class="panel">
           <h2 id="overlayTitle">DEMONIC FLAME</h2>
           <p id="overlayText"></p>
           <button class="playbtn" id="overlayBtn">Enter the Void</button>
+        </div>
+      </div>
+      <div class="overlay" id="pauseMenu" hidden>
+        <div class="panel pausepanel" role="dialog" aria-label="Paused">
+          <h2>PAUSED</h2>
+          <label class="setting">Music <input type="range" id="musicVol" min="0" max="100" step="5"></label>
+          <label class="setting">Sound effects <input type="range" id="sfxVol" min="0" max="100" step="5"></label>
+          <label class="setting" id="vibeRow">Vibration <input type="checkbox" id="vibeToggle"></label>
+          <div class="actions">
+            <button class="playbtn" id="resumeBtn" type="button">Resume</button>
+            <button class="textbtn" id="restartBtn" type="button">Restart game</button>
+          </div>
+          <p class="hint">P or Esc to resume</p>
         </div>
       </div>
     </div>
@@ -444,6 +473,7 @@
     <div class="ctrl"><span class="key">R</span> restart</div>
     <div class="ctrl"><span class="key">M</span> map (once found)</div>
     <div class="ctrl"><span class="key">N</span> mute</div>
+    <div class="ctrl"><span class="key">P</span> pause</div>
   </div>
 </div>
 
@@ -461,7 +491,13 @@
   // game loads" from the player's perspective.
   var bgMusic = new Audio("assets/bgmusic.mp3");
   bgMusic.loop = true;
-  bgMusic.volume = 0.45;
+  var musicVol = 1, sfxVol = 1;    // 0..1, set from the pause menu
+  try {
+    var mv = localStorage.getItem("df_music"), sv = localStorage.getItem("df_sfx");
+    if (mv !== null) musicVol = Math.max(0, Math.min(1, +mv || 0));
+    if (sv !== null) sfxVol = Math.max(0, Math.min(1, +sv || 0));
+  } catch(e){}
+  bgMusic.volume = 0.45 * musicVol;
   bgMusic.preload = "auto";
   var musicStarted = false;
   function startMusic(){
@@ -484,7 +520,7 @@
   // separate Audio instance from bgMusic, so playing it never touches or
   // interrupts the looping background track already running.
   var sfxLaugh = new Audio("assets/sfx_laugh.mp3");
-  sfxLaugh.volume = 0.85;
+  sfxLaugh.volume = 0.85 * sfxVol;
   sfxLaugh.preload = "auto";
   function playStartLaugh(){
     try {
@@ -515,7 +551,7 @@
       var comp = ac.createDynamicsCompressor();
       comp.connect(ac.destination);
       out = ac.createGain();
-      out.gain.value = muted ? 0 : 0.6;
+      out.gain.value = muted ? 0 : 0.6 * sfxVol;
       out.connect(comp);
       noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
       var d = noiseBuf.getChannelData(0);
@@ -674,11 +710,16 @@
     }
     function setMuted(m){
       muted = m;
-      if (out) out.gain.value = m ? 0 : 0.6;
+      if (out) out.gain.value = m ? 0 : 0.6 * sfxVol;
       bgMusic.muted = m; sfxLaugh.muted = m;
       try { localStorage.setItem("df_muted", m ? "1" : "0"); } catch(e){}
     }
-    return { init: init, play: play, setMuted: setMuted, isMuted: function(){ return muted; } };
+    function setVolumes(){
+      if (out) out.gain.value = muted ? 0 : 0.6 * sfxVol;
+      bgMusic.volume = 0.45 * musicVol;
+      sfxLaugh.volume = 0.85 * sfxVol;
+    }
+    return { init: init, play: play, setMuted: setMuted, setVolumes: setVolumes, isMuted: function(){ return muted; } };
   })();
   ["pointerdown", "keydown", "touchstart"].forEach(function(evt){
     document.addEventListener(evt, SFX.init, { capture: true });
@@ -713,6 +754,34 @@
     btn.addEventListener("click", function(e){ e.stopPropagation(); toggle(); btn.blur(); });
     document.addEventListener("keydown", function(e){ if (e.code === "KeyG") toggle(); });
   })();
+
+  // ---------- Hit feedback ----------
+  // hitStop freezes the action for a few frames when a blow lands, so hits
+  // feel heavy. buzz() vibrates the phone; only Android browsers support it
+  // (iPhones ignore it). Vibration can be switched off in the pause menu.
+  var hitStop = 0;
+  var vibeOn = true;
+  try { vibeOn = localStorage.getItem("df_vibe") !== "0"; } catch(e){}
+  var canVibrate = typeof navigator !== "undefined" && typeof navigator.vibrate === "function";
+  function buzz(pattern){
+    if (!vibeOn || !canVibrate) return;
+    try { navigator.vibrate(pattern); } catch(e){}
+  }
+  function impact(frames, vib){
+    hitStop = Math.max(hitStop, frames);
+    if (vib) buzz(vib);
+  }
+  // a quick spray of sparks where a hit lands (ice shards in frost stages)
+  function hitSparks(x, y, dir, count){
+    var frost = isFrostStage(stageIndex);
+    var cols = frost ? ["235,250,255", "160,220,255", "110,180,240"] : ["255,250,220", "255,200,80", "255,120,40"];
+    for (var i = 0; i < count; i++){
+      var ang = (dir ? (dir > 0 ? 0 : Math.PI) : Math.random() * Math.PI * 2) + (Math.random() - 0.5) * 1.9;
+      var sp = 2 + Math.random() * 4.5, life = 12 + Math.random() * 14;
+      explosionParticles.push({ x: x, y: y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 1,
+        life: life, maxLife: life, size: 1.5 + Math.random() * 2.2, color: cols[i % 3] });
+    }
+  }
 
   // ---------- Backdrop art (moonlit forest overlooking the city) ----------
   var bgImg = new Image();
@@ -2167,6 +2236,7 @@
 
   // Shared by the keyboard and the on-screen touch buttons.
   function pressKey(code){
+    if (paused){ if (code === "KeyP" || code === "Escape") togglePause(); return; }
     keys[code] = true;
     if (code === "KeyR" && (gameState === "gameover" || gameState === "win")) {
       startGame();
@@ -2179,12 +2249,18 @@
     }
     if (code === "KeyM") toggleMap();
     if (code === "Escape" && mapOpen) toggleMap();
+    else if (code === "KeyP" || code === "Escape") togglePause();
   }
   function releaseKey(code){
     keys[code] = false;
   }
 
   window.addEventListener("keydown", function(e){
+    if (paused){
+      // let the menu's sliders and buttons use the keyboard normally
+      if (e.code === "KeyP" || e.code === "Escape"){ e.preventDefault(); togglePause(); }
+      return;
+    }
     if (WATCHED.indexOf(e.code) !== -1) e.preventDefault();
     pressKey(e.code);
   });
@@ -2265,7 +2341,79 @@
     }
   }
 
+  // ---------- Pause menu ----------
+  // P / Esc / the pause button. Also pauses by itself when the tab or app is
+  // put in the background, so a phone call doesn't get you killed.
+  var paused = false;
+  var pauseMenu = document.getElementById("pauseMenu");
+  var pauseBtn = document.getElementById("pauseBtn");
+  var restartBtn = document.getElementById("restartBtn");
+  var musicSlider = document.getElementById("musicVol");
+  var sfxSlider = document.getElementById("sfxVol");
+  var vibeToggle = document.getElementById("vibeToggle");
+  var restartArmed = false;
+  document.getElementById("vibeRow").hidden = !canVibrate;
+  musicSlider.value = Math.round(musicVol * 100);
+  sfxSlider.value = Math.round(sfxVol * 100);
+  vibeToggle.checked = vibeOn;
+
+  function setPaused(p){
+    if (p && gameState !== "playing") return;
+    if (p === paused) return;
+    paused = p;
+    pauseMenu.hidden = !p;
+    root.classList.toggle("paused", p);
+    releaseAllKeys();
+    restartArmed = false;
+    restartBtn.textContent = "Restart game";
+    restartBtn.classList.remove("armed");
+    if (p){
+      bgMusic.pause();
+      SFX.play("swing", 0.5);
+      document.getElementById("resumeBtn").focus();
+    } else {
+      if (musicStarted){ var pr = bgMusic.play(); if (pr && pr.catch) pr.catch(function(){}); }
+      canvas.focus();
+    }
+  }
+  function togglePause(){ setPaused(!paused); }
+
+  pauseBtn.addEventListener("click", function(e){ e.stopPropagation(); setPaused(true); this.blur(); });
+  document.getElementById("resumeBtn").addEventListener("click", function(){ setPaused(false); });
+  restartBtn.addEventListener("click", function(){
+    // two taps, so a stray tap can't throw away a whole run
+    if (!restartArmed){
+      restartArmed = true;
+      restartBtn.textContent = "Tap again to restart";
+      restartBtn.classList.add("armed");
+      return;
+    }
+    setPaused(false);
+    startGame();
+  });
+  musicSlider.addEventListener("input", function(){
+    musicVol = musicSlider.value / 100;
+    SFX.setVolumes();
+    try { localStorage.setItem("df_music", String(musicVol)); } catch(e){}
+  });
+  sfxSlider.addEventListener("input", function(){
+    sfxVol = sfxSlider.value / 100;
+    SFX.setVolumes();
+    try { localStorage.setItem("df_sfx", String(sfxVol)); } catch(e){}
+  });
+  sfxSlider.addEventListener("change", function(){ SFX.play("swat"); });   // preview the new level
+  vibeToggle.addEventListener("change", function(){
+    vibeOn = vibeToggle.checked;
+    try { localStorage.setItem("df_vibe", vibeOn ? "1" : "0"); } catch(e){}
+    buzz(60);
+  });
+  document.addEventListener("visibilitychange", function(){ if (document.hidden) setPaused(true); });
+  window.addEventListener("blur", function(){ setPaused(true); });
+
   function startGame(){
+    paused = false;
+    pauseMenu.hidden = true;
+    root.classList.remove("paused");
     resetGame();
     releaseAllKeys();
     overlay.hidden = true;
@@ -2377,6 +2525,7 @@
       if (!godMode) player.hp -= 1;
       shake = 12;
       SFX.play("sizzle");
+      buzz(player.hp <= 0 ? [120, 60, 220] : 140);
       if (player.hp <= 0){
         player.hp = 0;
         gameState = "gameover"; SFX.play("gameover");
@@ -2453,6 +2602,8 @@
           en.x += (en.x + en.w/2 < player.x + player.w/2 ? -1 : 1) * 14;
           shake = Math.max(shake, 5);
           SFX.play("swat");
+          hitSparks(en.x + en.w/2, en.y + en.h*0.4, player.facing, 10);
+          impact(3, 20);
         }
       } else if (hitbox && intersects(hitbox, en) && !(en.golem && en.hurtT > 0)){
         en.alive = false;
@@ -2460,6 +2611,8 @@
         score += 1;
         shake = 8;
         SFX.play("impDie");
+        hitSparks(en.x + en.w/2, en.y + en.h/2, player.facing, 16);
+        impact(5, 35);
       } else if (player.superMode && intersects(player, en)){
         // overpowered in fire form: mere contact instantly kills the enemy
         // and the player takes no damage at all.
@@ -2468,11 +2621,14 @@
         score += 1;
         shake = 6;
         SFX.play("impDie");
+        hitSparks(en.x + en.w/2, en.y + en.h/2, 0, 10);
+        impact(2, 20);
       } else if (!godMode && player.invuln <= 0 && intersects(player, en)){
         player.hp -= 1;
         player.invuln = 65;
         shake = 10;
         SFX.play("hurt");
+        impact(6, player.hp <= 0 ? [120, 60, 220] : 90);
         player.vx = (player.x < en.x ? -1 : 1) * 3;
         player.vy = -6;
         if (player.hp <= 0){
@@ -2538,6 +2694,7 @@
     player.hp -= 1;
     player.invuln = 65;
     shake = 12;
+    impact(6, player.hp <= 0 ? [120, 60, 220] : 90);
     player.vy = -7;
     player.x += (player.x + player.w/2 < fromX ? -1 : 1) * 18;
     player.x = Math.max(0, Math.min(WORLD_W - player.w, player.x));
@@ -2616,6 +2773,7 @@
     b.hitFlash = 10;
     SFX.play(b.hp <= 0 ? "bossDeath" : "bossHit");
     shake = Math.max(shake, 6);
+    impact(b.hp <= 0 ? 14 : 4, b.hp <= 0 ? [90, 40, 260] : 45);
     if (!b.phase2 && b.hp <= b.maxHp / 2) b.phase2 = true;
     if (b.hp <= 0){
       b.hp = 0;
@@ -2961,6 +3119,7 @@
     b.hp -= 1; b.invuln = invuln; b.hitFlash = 10;
     SFX.play(b.hp <= 0 ? "bossDeath" : "bossHit");
     shake = Math.max(shake, 6);
+    impact(b.hp <= 0 ? 14 : 4, b.hp <= 0 ? [90, 40, 260] : 45);
     if (!b.phase2 && b.hp <= b.maxHp / 2) b.phase2 = true;
     if (b.hp <= 0){
       b.hp = 0;
@@ -4169,7 +4328,13 @@
     if (dt > 5) dt = 0;
     else if (dt > 2.5) dt = 2.5;
 
-    update(dt);
+    if (paused){
+      // frozen: draw the scene behind the menu but don't advance it
+    } else if (hitStop > 0){
+      hitStop -= dt;                    // hit-stop: hold the frame, keep the shake
+    } else {
+      update(dt);
+    }
     render();
     updateTouchUi();
 
