@@ -844,10 +844,30 @@
     });
   })();
 
+  // Frost wisp: the flying enemy of the frozen stages. Same frame sets as the
+  // flying imp (hover / fly / dive), faces RIGHT; anchor = the glowing eyes.
+  var FROST_FLYER_SCALE = 0.48;
+  var FROST_FLYER_SPRITES = {};
+  (function(){
+    var anchors = {
+      hover0:[106,66], hover1:[108,66], hover2:[107,67], hover3:[106,66],
+      fly0:[95,61], fly1:[128,62], fly2:[124,60], fly3:[103,66],
+      dive0:[107,74], dive1:[114,72], dive2:[114,74], dive3:[113,73]
+    };
+    Object.keys(anchors).forEach(function(key){
+      var im = new Image();
+      im.ready = false;
+      im.onload = function(){ im.ready = true; };
+      im.src = "assets/frost_flyer_" + key + ".png";
+      im.ax = anchors[key][0]; im.ay = anchors[key][1];
+      FROST_FLYER_SPRITES[key] = im;
+    });
+  })();
+
   // Frost golem (the walking enemy of the frozen stages). Faces RIGHT
   // natively. footX = centre of the feet in source px; feet sit on the
   // bottom edge of every frame.
-  var GOLEM_SCALE = 0.36, GOLEM_W = 40, GOLEM_H = 62;
+  var GOLEM_SCALE = 0.432, GOLEM_W = 48, GOLEM_H = 74;   // 20% up from 0.36 / 40 / 62
   var GOLEM_SPRITES = {};
   (function(){
     var foot = { walk0: 85, walk1: 97, walk2: 94, raise: 85, blade: 75, hurt: 97, die0: 91, die1: 96 };
@@ -1169,6 +1189,13 @@
         [640, 605, 735, 0.6, -926],      // [600,-900]
         [630, 602, 718, 0.5, -1326],     // [600,-1300]
         [400, 325, 555, 0.7, -1626]      // [320,-1600]
+      ],
+      // frost wisps hover between the golem ledges (~70px above a ledge)
+      flyers: [
+        [[645, -170], [360, -270], [940, -270]],
+        [[680, -570], [360, -670], [1020, -680]],
+        [[660, -1370], [410, -1470], [930, -1470]],
+        [[440, -1670], [700, -1770], [950, -1670]]
       ]
     },
     {
@@ -1274,6 +1301,11 @@
         [650, 625, 755, 0.6, 204],     // high ledge
         [1000, 730, 1190, 1.0, 444],
         [1000, 985, 1095, 0.6, 274]    // platform
+      ],
+      // wisps only before the arena: the wyrm has it to itself
+      flyers: [
+        [[300, 260], [560, 170]],
+        [[900, 250], [1250, 220]]
       ]
     },
     {
@@ -1298,6 +1330,10 @@
         [900, 200, 1700, 0.9, 444],      // floor
         [870, 845, 975, 0.5, 74],        // [840,100]
         [430, 405, 535, 0.5, -106]       // [400,-80]
+      ],
+      flyers: [
+        [[1350, 220], [1000, 120]],
+        [[700, -110], [360, -200]]
       ]
     }
   ];
@@ -1345,7 +1381,7 @@
 
   // Frost golem: patrols like an imp, but slower; when you come close in
   // front of it, it rears back (a tell) and swings its ice blade.
-  var GOLEM_WINDUP = 26, GOLEM_SWING = 18, GOLEM_REACH = 58;
+  var GOLEM_WINDUP = 26, GOLEM_SWING = 18, GOLEM_REACH = 68;
   function updateGolem(en, dt){
     en.walkCycle += 0.1 * dt;
     if (en.hurtT > 0) en.hurtT -= dt;
@@ -1758,7 +1794,7 @@
       var frost = isFrostStage(si);
       return {
         enemies: s.enemies.map(function(e){ return makeEnemy(e[0],e[1],e[2],e[3],e[4], frost); })
-                   .concat((s.flyers || []).map(function(route, i){ return makeFlyer(route, i); })),
+                   .concat((s.flyers || []).map(function(route, i){ var f = makeFlyer(route, i); f.frost = frost; return f; })),
         boss: s.boss === "wyrm" ? makeWyrm(s) : s.boss ? makeBoss(s.width) : null
       };
     });
@@ -3493,7 +3529,7 @@
     if (sx < -80 || sx > VW + 80 || sy - camY < -80 || sy - camY > VH + 80) return;
     var set = f.state === "swoop" || f.state === "windup" ? "dive" : f.state === "hover" ? "hover" : "fly";
     var rate = set === "hover" ? 0.16 : set === "dive" ? 0.3 : 0.2;
-    var img = FLYER_SPRITES[set + (Math.floor(f.anim * rate) % 4)];
+    var img = (f.frost ? FROST_FLYER_SPRITES : FLYER_SPRITES)[set + (Math.floor(f.anim * rate) % 4)];
     ctx.save();
     ctx.translate(sx, sy);
     if (!f.alive){
@@ -3504,7 +3540,7 @@
     ctx.scale(f.facing, 1);
     if (f.hitFlash > 0 || !f.alive) ctx.filter = "brightness(2.4) saturate(0.3)";
     if (img && img.ready){
-      var S = FLYER_SCALE;
+      var S = f.frost ? FROST_FLYER_SCALE : FLYER_SCALE;
       // eyes sit a little above and ahead of the hit box centre
       ctx.drawImage(img, 7 - img.ax * S, -9 - img.ay * S, img.naturalWidth * S, img.naturalHeight * S);
     } else {
