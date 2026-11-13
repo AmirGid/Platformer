@@ -751,6 +751,21 @@
     BACKDROPS.frost = entry;
   })();
 
+  // Landscape ice art: the Frozen Den's crystal cave and the frozen wastes
+  // outside the Obsidian Gate. heightK = drawn height as a multiple of the
+  // screen (extra room to scroll up through in tall stages); dim = how much
+  // to darken it so sprites read on top.
+  [["den", "assets/den_background.jpg", 1.4, 0.32], ["tundra", "assets/tundra_background.jpg", 1.18, 0.4]].forEach(function(d){
+    var im = new Image();
+    var entry = { img: im, ready: false, w: 0, h: 0, dim: d[3], frost: true };
+    im.onload = function(){
+      var scale = (VH * d[2]) / im.height;
+      entry.w = im.width * scale; entry.h = im.height * scale; entry.ready = true;
+    };
+    im.src = d[1];
+    BACKDROPS[d[0]] = entry;
+  });
+
   // Ice ledge art. The snow surface sits ICE_TOP px below the image top
   // (in source pixels), so ledges line up with their collision box.
   var iceImg = new Image();
@@ -826,6 +841,43 @@
       im.onload = function(){ im.ready = true; };
       im.src = sources[key];
       IMP_SPRITES[key] = im;
+    });
+  })();
+
+  // Frost golem (the walking enemy of the frozen stages). Faces RIGHT
+  // natively. footX = centre of the feet in source px; feet sit on the
+  // bottom edge of every frame.
+  var GOLEM_SCALE = 0.36, GOLEM_W = 40, GOLEM_H = 62;
+  var GOLEM_SPRITES = {};
+  (function(){
+    var foot = { walk0: 85, walk1: 97, walk2: 94, raise: 85, blade: 75, hurt: 97, die0: 91, die1: 96 };
+    Object.keys(foot).forEach(function(key){
+      var im = new Image();
+      im.ready = false;
+      im.onload = function(){ im.ready = true; };
+      im.src = "assets/golem_" + key + ".png";
+      im.footX = foot[key];
+      GOLEM_SPRITES[key] = im;
+    });
+  })();
+
+  // Frost Wyrm boss (Obsidian Gate). Faces RIGHT natively. anchor = the
+  // point of the body that sits at the wyrm's x/y, in source px.
+  var WYRM_SCALE = 0.8;
+  var WYRM_SPRITES = {};
+  (function(){
+    var anchors = {
+      fly0: [195, 117], fly1: [184, 122], slither: [256, 130], charge: [150, 119],
+      breath: [140, 120], exhale: [164, 118], roar: [162, 112], aura: [165, 108],
+      die0: [129, 108], die1: [134, 120]
+    };
+    Object.keys(anchors).forEach(function(key){
+      var im = new Image();
+      im.ready = false;
+      im.onload = function(){ im.ready = true; };
+      im.src = "assets/wyrm_" + key + ".png";
+      im.a = anchors[key];
+      WYRM_SPRITES[key] = im;
     });
   })();
 
@@ -1109,15 +1161,14 @@
         [420, -1800, 100], [880, -1800, 100],
         [480, -1900, 360]
       ],
-      enemies: [],
-      // hover spots sit ~70px above a ledge, so they float just over your head
-      flyers: [
-        [[445, 110], [865, 120]],
-        [[645, -170], [360, -270], [940, -270]],
-        [[680, -570], [360, -670], [1020, -680]],
-        [[670, -970], [435, -1070], [895, -1080]],
-        [[660, -1370], [410, -1470], [930, -1470]],
-        [[440, -1670], [700, -1770], [950, -1670]]
+      // frost golems guard the wider ledges on the way up
+      enemies: [
+        [700, 300, 1000, 0.8, 444],      // floor
+        [600, 565, 725, 0.6, -126],      // [560,-100]
+        [620, 545, 815, 0.7, -526],      // [540,-500]
+        [640, 605, 735, 0.6, -926],      // [600,-900]
+        [630, 602, 718, 0.5, -1326],     // [600,-1300]
+        [400, 325, 555, 0.7, -1626]      // [320,-1600]
       ]
     },
     {
@@ -1200,34 +1251,29 @@
       ]
     },
     {
-      // F: the last stretch. The Obsidian Gate at the far end is the finish.
+      // F: frozen wastes. Past the frost golems the Frost Wyrm guards the
+      // Obsidian Gate; the gate stays sealed in ice until the wyrm is dead.
       name: "Obsidian Gate",
       exits: {},
-      backdrop: "cavern",
-      tint: "rgba(70,20,110,0.28)",
+      backdrop: "tundra",
+      ice: true,
+      oneWay: true,
       entryTopX: 160,
       finish: 2500,
+      boss: "wyrm",
+      arenaX: 1420,                 // walking past this wakes the wyrm
       width: 2600,
-      ground: [[0, 600], [720, 1200], [1320, 1900], [2040, 2600]],
+      ground: [[0, 600], [720, 1200], [1320, 2600]],
       platforms: [
         [250, 380, 130], [430, 300, 120], [620, 230, 140],
         [800, 380, 130], [980, 300, 120], [1150, 380, 120],
-        [1400, 380, 130], [1580, 300, 140], [1760, 230, 120],
-        [1960, 320, 60],                                      // stepping stone over the last pit
-        [2150, 380, 140]
+        [1560, 340, 140], [1900, 280, 150], [2240, 340, 140]   // arena ledges
       ],
       enemies: [
-        [400, 100, 590, 1.4, 444],
-        [650, 625, 755, 1.0, 204],     // high ledge
-        [1000, 730, 1190, 1.7, 444],
-        [1000, 985, 1095, 1.1, 274],   // platform
-        [1600, 1330, 1890, 1.6, 444],
-        [1640, 1585, 1715, 1.0, 274],  // platform
-        [2200, 2050, 2420, 1.7, 444]
-      ],
-      flyers: [
-        [[900, 250], [1250, 220]],
-        [[1700, 180], [2100, 250]]
+        [400, 100, 590, 0.9, 444],
+        [650, 625, 755, 0.6, 204],     // high ledge
+        [1000, 730, 1190, 1.0, 444],
+        [1000, 985, 1095, 0.6, 274]    // platform
       ]
     },
     {
@@ -1235,7 +1281,7 @@
       // The ice ledges climb right-to-left up to the world map at the top left.
       name: "Frozen Den",
       exits: { right: 3 },
-      backdrop: "frost",
+      backdrop: "den",
       ice: true,
       oneWay: true,
       width: 1800,
@@ -1248,10 +1294,10 @@
         [40, -290, 200],                                      // top left: the map
         [1450, 140, 120], [1200, -60, 120]
       ],
-      enemies: [],
-      flyers: [
-        [[1350, 220], [1000, 120]],
-        [[700, -110], [360, -200]]
+      enemies: [
+        [900, 200, 1700, 0.9, 444],      // floor
+        [870, 845, 975, 0.5, 74],        // [840,100]
+        [430, 405, 535, 0.5, -106]       // [400,-80]
       ]
     }
   ];
@@ -1279,9 +1325,59 @@
     return pits;
   }
 
-  function makeEnemy(spawnX, rangeLo, rangeHi, speed, spawnY){
-    return { x:spawnX, y:(spawnY === undefined ? -40 : spawnY), w:30, h:26, vx:speed, vy:0, lo:rangeLo, hi:rangeHi,
+  // Frozen stages: the frost backdrops. Their walking enemies are frost golems.
+  function isFrostStage(i){
+    var b = STAGES[i].backdrop;
+    return b === "frost" || b === "den" || b === "tundra";
+  }
+
+  function makeEnemy(spawnX, rangeLo, rangeHi, speed, spawnY, golem){
+    var en = { x:spawnX, y:(spawnY === undefined ? -40 : spawnY), w:30, h:26, vx:speed, vy:0, lo:rangeLo, hi:rangeHi,
              alive:true, hitFlash:0, walkCycle:Math.random()*10, dead_t:0 };
+    if (golem){
+      // bigger and tougher: two hits, and it swings an ice blade at you
+      en.golem = true; en.w = GOLEM_W; en.h = GOLEM_H; en.hp = 2;
+      if (spawnY !== undefined) en.y = spawnY + 26 - GOLEM_H;   // same surface as an imp's spawnY
+      en.hurtT = 0; en.atkT = 0; en.atkCd = 60; en.facing = speed < 0 ? -1 : 1;
+    }
+    return en;
+  }
+
+  // Frost golem: patrols like an imp, but slower; when you come close in
+  // front of it, it rears back (a tell) and swings its ice blade.
+  var GOLEM_WINDUP = 26, GOLEM_SWING = 18, GOLEM_REACH = 58;
+  function updateGolem(en, dt){
+    en.walkCycle += 0.1 * dt;
+    if (en.hurtT > 0) en.hurtT -= dt;
+    if (en.atkCd > 0) en.atkCd -= dt;
+    var pcx = player.x + player.w/2, ecx = en.x + en.w/2;
+    var sameLevel = Math.abs((player.y + player.h) - (en.y + en.h)) < 50;
+    if (en.atkT > 0){
+      en.atkT += dt;
+      if (en.atkT >= GOLEM_WINDUP && en.atkT < GOLEM_WINDUP + 8){
+        var reach = en.facing > 0 ? rect(en.x + en.w - 6, en.y + 4, GOLEM_REACH, en.h - 6)
+                                  : rect(en.x + 6 - GOLEM_REACH, en.y + 4, GOLEM_REACH, en.h - 6);
+        if (!en.swung){ en.swung = true; SFX.play("swing", near(ecx, en.y)); }
+        if (intersects(player, reach)) hurtPlayer(ecx, "A frost golem cut you down.");
+      }
+      if (en.atkT >= GOLEM_WINDUP + GOLEM_SWING){ en.atkT = 0; en.atkCd = 80; }
+    } else if (en.hurtT <= 0){
+      if (en.atkCd <= 0 && sameLevel && Math.abs(pcx - ecx) < GOLEM_REACH + 24){
+        en.facing = pcx > ecx ? 1 : -1;
+        en.atkT = 0.01; en.swung = false;
+      } else {
+        if (en.x <= en.lo) en.vx = Math.abs(en.vx);
+        if (en.x + en.w >= en.hi) en.vx = -Math.abs(en.vx);
+        en.facing = en.vx < 0 ? -1 : 1;
+      }
+    }
+    var moving = en.atkT <= 0 && en.hurtT <= 0;
+    var saveVx = en.vx;
+    if (!moving) en.vx = 0;
+    en.vy += GRAVITY * dt;
+    if (en.vy > MAX_FALL) en.vy = MAX_FALL;
+    moveAndCollide(en, allPlatforms);
+    en.vx = saveVx;
   }
 
   // Flying imp. x/y/w/h is its hit box like a walking imp; cx/cy is its centre.
@@ -1639,7 +1735,7 @@
 
   var player, enemies, camX, camY = 0, score, gameState, shake, timeAlive;
   var explosionParticles, explosionFlash;
-  var boss = null, fireballs = [], shockwaves = [];
+  var boss = null, fireballs = [], shockwaves = [], icicles = [];
   var freezeT = 0;   // 0..1 progress of the fire-to-frost change after the golem dies
   var arenaFrozen = false;   // once true, the golem's room is the Frozen Spire for good
   var heart = null;  // the golem's heart once it has dropped
@@ -1658,13 +1754,15 @@
     itemCard = null;
     syncMapBtn();
     abilityCard = null;
-    stageState = STAGES.map(function(s){
+    stageState = STAGES.map(function(s, si){
+      var frost = isFrostStage(si);
       return {
-        enemies: s.enemies.map(function(e){ return makeEnemy(e[0],e[1],e[2],e[3],e[4]); })
+        enemies: s.enemies.map(function(e){ return makeEnemy(e[0],e[1],e[2],e[3],e[4], frost); })
                    .concat((s.flyers || []).map(function(route, i){ return makeFlyer(route, i); })),
-        boss: s.boss ? makeBoss(s.width) : null
+        boss: s.boss === "wyrm" ? makeWyrm(s) : s.boss ? makeBoss(s.width) : null
       };
     });
+    icicles = [];
     boss = null;
     fireballs = [];
     shockwaves = [];
@@ -1696,6 +1794,7 @@
     boss = stageState[index].boss;
     fireballs = [];
     shockwaves = [];
+    icicles = [];
     explosionParticles = [];
     explosionFlash = null;
 
@@ -1846,8 +1945,17 @@
     }
   }
 
-  // A rolled parchment with a red ribbon (placeholder art).
+  // A rolled parchment with a red ribbon and a compass seal.
+  var scrollImg = new Image();
+  scrollImg.ready = false;
+  scrollImg.onload = function(){ scrollImg.ready = true; };
+  scrollImg.src = "assets/map_scroll.png";
   function drawScroll(x, y, s){
+    if (scrollImg.ready){
+      var w = 58 * s, h = w * scrollImg.naturalHeight / scrollImg.naturalWidth;
+      ctx.drawImage(scrollImg, x - w/2, y - h/2, w, h);
+      return;
+    }
     ctx.save();
     ctx.translate(x, y);
     ctx.scale(s, s);
@@ -1929,7 +2037,7 @@
     "boss": { x: 130, y: 64,  w: 112, h: 96, name: "Molten Core",   color: "#7a3410" },
     "8":    { x: 0,   y: 104, w: 112, h: 56, name: "Frozen Den",    color: "#2f6080" },
     "6":    { x: 429, y: 64,  w: 34,  h: 32, name: "",              color: "#3a1a44" },
-    "7":    { x: 390, y: 104, w: 112, h: 56, name: "Obsidian Gate", color: "#4a1a6a" }
+    "7":    { x: 390, y: 104, w: 112, h: 56, name: "Obsidian Gate", color: "#2f5a7a" }
   };
   // doors between rooms: [roomA, roomB, x, y, vertical]
   var MAP_DOORS = [
@@ -2236,7 +2344,7 @@
       if (player.hp <= 0){
         player.hp = 0;
         gameState = "gameover"; SFX.play("gameover");
-        showOverlay("YOU BURNED", "The lava took you. Score: " + score + " · Time: " + Math.floor(timeAlive/60) + "s", "Try Again");
+        showOverlay(isFrostStage(stageIndex) ? "YOU FROZE" : "YOU BURNED", (isFrostStage(stageIndex) ? "The ice chasm took you." : "The lava took you.") + " Score: " + score + " · Time: " + Math.floor(timeAlive/60) + "s", "Try Again");
         return;
       }
       player.x = player.entryX;
@@ -2287,6 +2395,9 @@
       }
       if (en.flyer){
         updateFlyer(en, dt);
+      } else if (en.golem){
+        updateGolem(en, dt);
+        if (en.y > VH + 40){ en.alive = false; en.dead_t = 99; continue; }
       } else {
         en.walkCycle += 0.16 * dt;
         if (en.x <= en.lo) en.vx = Math.abs(en.vx);
@@ -2299,7 +2410,15 @@
 
       if (en.hitFlash > 0) en.hitFlash -= dt;
 
-      if (hitbox && intersects(hitbox, en)){
+      if (en.golem && en.hp > 1 && hitbox && intersects(hitbox, en)){
+        // first hit only cracks a golem: it staggers back
+        if (en.hurtT <= 0){
+          en.hp -= 1; en.hurtT = 26; en.hitFlash = 10; en.atkT = 0;
+          en.x += (en.x + en.w/2 < player.x + player.w/2 ? -1 : 1) * 14;
+          shake = Math.max(shake, 5);
+          SFX.play("swat");
+        }
+      } else if (hitbox && intersects(hitbox, en) && !(en.golem && en.hurtT > 0)){
         en.alive = false;
         en.hitFlash = 10;
         score += 1;
@@ -2323,7 +2442,7 @@
         if (player.hp <= 0){
           player.hp = 0;
           gameState = "gameover"; SFX.play("gameover");
-          showOverlay("YOU DIED", "The imps got the better of you. Score: " + score + " · Time: " + Math.floor(timeAlive/60) + "s", "Try Again");
+          showOverlay("YOU DIED", (en.golem ? "The frost golems crushed you." : "The imps got the better of you.") + " Score: " + score + " · Time: " + Math.floor(timeAlive/60) + "s", "Try Again");
         }
       }
     }
@@ -2349,11 +2468,11 @@
 
     // reaching the Obsidian Gate wins the game
     var fin = STAGES[stageIndex].finish;
-    if (fin && player.x + player.w >= fin && gameState === "playing"){
+    if (fin && !gateSealed() && player.x + player.w >= fin && gameState === "playing"){
       gameState = "win";
       var lifePct = Math.round((player.hp / player.maxHp) * 100);
       SFX.play("win");
-      showOverlay("YOU ESCAPED!", "You shattered the Magma Golem, climbed the Frozen Spire and reached the Obsidian Gate with " + lifePct + "% of your flask still full. Time: " + Math.floor(timeAlive/60) + "s", "Play Again");
+      showOverlay("YOU ESCAPED!", "You shattered the Magma Golem, slew the Frost Wyrm and passed through the Obsidian Gate with " + lifePct + "% of your flask still full. Time: " + Math.floor(timeAlive/60) + "s", "Play Again");
     }
   }
 
@@ -2500,6 +2619,7 @@
   }
 
   function updateBoss(dt, hitbox){
+    if (boss.kind === "wyrm"){ updateWyrm(dt, hitbox); return; }
     var b = boss;
     b.anim += dt;
     if (b.hitFlash > 0) b.hitFlash -= dt;
@@ -2638,6 +2758,7 @@
   function drawBoss(){
     var b = boss;
     if (!b) return;
+    if (b.kind === "wyrm"){ drawWyrm(b); return; }
     var img = BOSS_SPRITES[bossPose(b)];
     var sx = b.x - camX;
     ctx.save();
@@ -2693,6 +2814,7 @@
   }
 
   function drawBossAttacks(){
+    drawIcicles();
     for (var i = 0; i < fireballs.length; i++){
       var f = fireballs[i], fx = f.x - camX;
       // tail
@@ -2732,17 +2854,303 @@
     ctx.fillStyle = "rgba(10,6,8,0.6)";
     roundRect(x - 10, y - 24, w + 20, h + 34, 10);
     ctx.fill();
-    ctx.fillStyle = "#ffcf9e";
+    var icy = b.kind === "wyrm";
+    ctx.fillStyle = icy ? "#cdeeff" : "#ffcf9e";
     ctx.font = "10px 'Press Start 2P', monospace";
     ctx.textAlign = "center";
-    ctx.fillText(BOSS_NAME, VW/2, y - 8);
-    ctx.fillStyle = "#2a1210";
+    ctx.fillText(icy ? WYRM_NAME : BOSS_NAME, VW/2, y - 8);
+    ctx.fillStyle = icy ? "#0e1e2c" : "#2a1210";
     roundRect(x, y, w, h, 4); ctx.fill();
     var pct = b.hp / b.maxHp;
     var g = ctx.createLinearGradient(x, 0, x + w, 0);
-    g.addColorStop(0, "#ff4a1c"); g.addColorStop(1, "#ffb347");
+    if (icy){ g.addColorStop(0, "#3aa8ff"); g.addColorStop(1, "#c8f4ff"); }
+    else { g.addColorStop(0, "#ff4a1c"); g.addColorStop(1, "#ffb347"); }
     ctx.fillStyle = g;
     if (pct > 0){ roundRect(x + 1, y + 1, Math.max(4, (w - 2) * pct), h - 2, 3); ctx.fill(); }
+    ctx.restore();
+  }
+
+  // ---------- Boss: the Frost Wyrm (Obsidian Gate) ----------
+  // Sleeps above the sealed gate until you walk into the arena. Then it flies
+  // around you and picks one of three attacks:
+  //   breath  - drops low, charges (chest glows), then breathes a beam of ice
+  //             down at the ground in front of it. Get under it or far away.
+  //   dive    - rears up, then dives at you and skids along the ground. Only
+  //             the head hurts. Afterwards it lies on the ice, open to hits.
+  //   icicles - a frost aura brings down a row of icicles (shadows warn you).
+  // Being low (breathing or resting) is when you can reach it from the ground;
+  // while it hovers you can still jump and hit it.
+  var WYRM_HP = 12;
+  var WYRM_NAME = "FROST WYRM";
+  var WYRM_HOVER = GROUND_Y - 190;
+  var WYRM_BREATH_Y = GROUND_Y - 98;           // beam end lands on the floor
+  var WYRM_SLIDE_Y = GROUND_Y - 57;            // slither art's belly on the floor
+  var WYRM_MOUTH = [98, 6], WYRM_BEAM_END = [360, 90];   // from x/y, facing right
+
+  function makeWyrm(stage){
+    return {
+      kind: "wyrm", x: stage.finish - 120, y: WYRM_HOVER - 70, vx: 0, vy: 0, facing: -1,
+      hp: WYRM_HP, maxHp: WYRM_HP, phase2: false, arenaX: stage.arenaX,
+      state: "waiting", t: 0, anim: 0, nextAttackIn: 90, side: -1,
+      hitFlash: 0, invuln: 0, dead_t: 0
+    };
+  }
+
+  function wyrmBox(b){
+    if (b.state === "slide" || b.state === "rest") return rect(b.x - 180, GROUND_Y - 62, 360, 62);
+    return rect(b.x - 85, b.y - 50, 170, 95);
+  }
+  function wyrmHeadBox(b){
+    if (b.state === "slide") return rect(b.x + b.facing * 165 - 42, GROUND_Y - 72, 84, 72);
+    return rect(b.x + b.facing * 70 - 48, b.y - 42, 96, 80);
+  }
+  function wyrmState(b, s){
+    b.state = s; b.t = 0; b.fired = false;
+    if (s === "intro") SFX.play("roar");
+    if (s === "breath") SFX.play("breath", near(b.x, b.y));
+    if (s === "icicles") SFX.play("freeze", near(b.x, b.y));
+  }
+  function wyrmBurst(x, y, count, power){
+    explosionFlash = { x: x, y: y, t: 0, maxT: 30 };
+    for (var i = 0; i < count; i++){
+      var ang = Math.random() * Math.PI * 2, sp = 2 + Math.random() * power;
+      explosionParticles.push({
+        x: x, y: y, vx: Math.cos(ang)*sp, vy: Math.sin(ang)*sp - 2,
+        life: 40 + Math.random()*40, maxLife: 80, size: 2 + Math.random()*4,
+        color: ["220,245,255", "120,200,255", "60,80,100"][i % 3]
+      });
+    }
+  }
+  function damageWyrm(b, invuln){
+    b.hp -= 1; b.invuln = invuln; b.hitFlash = 10;
+    SFX.play(b.hp <= 0 ? "bossDeath" : "bossHit");
+    shake = Math.max(shake, 6);
+    if (!b.phase2 && b.hp <= b.maxHp / 2) b.phase2 = true;
+    if (b.hp <= 0){
+      b.hp = 0;
+      wyrmState(b, "dead");
+      icicles = [];
+      shake = 26;
+      wyrmBurst(b.x, b.y, 40, 5);
+    }
+  }
+  function beamHits(b, box){
+    var mx = b.x + b.facing * WYRM_MOUTH[0], my = b.y + WYRM_MOUTH[1];
+    var reach = Math.min(1, (b.t - 2) / 10);
+    var ex = mx + b.facing * (WYRM_BEAM_END[0] - WYRM_MOUTH[0]) * reach;
+    var ey = my + (WYRM_BEAM_END[1] - WYRM_MOUTH[1]) * reach;
+    var px = box.x + box.w/2, py = box.y + box.h/2;
+    var dx = ex - mx, dy = ey - my, L2 = dx*dx + dy*dy || 1;
+    var u = Math.max(0, Math.min(1, ((px - mx) * dx + (py - my) * dy) / L2));
+    var cx = mx + dx * u, cy = my + dy * u;
+    var r = 10 + 34 * u * reach;
+    return Math.hypot(px - cx, py - cy) < r + box.w * 0.4;
+  }
+  function spawnIcicles(b){
+    var n = b.phase2 ? 7 : 5, pcx = player.x + player.w/2;
+    for (var i = 0; i < n; i++){
+      var x = pcx + (i - (n - 1) / 2) * 105 + (Math.random() - 0.5) * 30;
+      if (x < 1340 || x > WORLD_W - 20) continue;
+      icicles.push({ x: x, y: camY - 60, vy: 0, delay: 34 + Math.abs(i - (n - 1) / 2) * 7, t: 0 });
+    }
+  }
+
+  function updateWyrm(dt, hitbox){
+    var b = boss;
+    b.anim += dt;
+    if (b.hitFlash > 0) b.hitFlash -= dt;
+    if (b.invuln > 0) b.invuln -= dt;
+    updateIcicles(dt);
+    if (b.state === "dead"){
+      var before = b.dead_t;
+      b.dead_t += dt;
+      // the shattered body drops to the ice, then bursts into rubble
+      if (b.y < GROUND_Y - 82){ b.vy += 0.4 * dt; b.y = Math.min(GROUND_Y - 82, b.y + b.vy * dt); }
+      if (before < 70 && b.dead_t >= 70){ shake = 26; wyrmBurst(b.x, GROUND_Y - 50, 80, 8); SFX.play("explosion"); }
+      return;
+    }
+    var mul = b.phase2 ? 1.3 : 1;
+    var pcx = player.x + player.w/2;
+    var lo = 1400, hi = WORLD_W - 70;
+    function flyTo(tx, ty, k, max){
+      var dx = Math.max(lo, Math.min(hi, tx)) - b.x, dy = ty - b.y;
+      var sx = Math.max(-max, Math.min(max, dx * k)), sy = Math.max(-max, Math.min(max, dy * k));
+      b.x += sx * dt; b.y += sy * dt;
+      return Math.abs(dx) < 14 && Math.abs(dy) < 10;
+    }
+    function faceP(){ if (Math.abs(pcx - b.x) > 20) b.facing = pcx > b.x ? 1 : -1; }
+    b.t += dt;
+    switch (b.state){
+      case "waiting":
+        b.y = WYRM_HOVER - 70 + Math.sin(b.anim * 0.04) * 6;
+        if (player.x > b.arenaX){ wyrmState(b, "intro"); shake = 12; }
+        break;
+      case "intro":
+        faceP();
+        if (b.t > 100){ wyrmState(b, "fly"); b.nextAttackIn = 70; }
+        break;
+      case "fly":
+        faceP();
+        if (Math.abs(pcx - b.x) < 120) b.side = pcx > b.x ? -1 : 1;
+        flyTo(pcx + b.side * 280, WYRM_HOVER + Math.sin(b.anim * 0.05) * 14, 0.04, 4 * mul);
+        if (b.t > b.nextAttackIn){
+          var r = Math.random();
+          wyrmState(b, r < 0.4 ? "breathPos" : r < 0.75 ? "rear" : "icicles");
+        }
+        break;
+      case "breathPos":   // drop down beside the player, aimed at them
+        faceP();
+        var arrived = flyTo(pcx - b.facing * 300, WYRM_BREATH_Y, 0.07, 5 * mul);
+        if (arrived || b.t > 80) wyrmState(b, "charge");
+        break;
+      case "charge":
+        if (b.t > (b.phase2 ? 30 : 42)) wyrmState(b, "breath");
+        break;
+      case "breath":
+        if (b.t > 4 && b.t < 64 && beamHits(b, player)) hurtPlayer(b.x + b.facing * 200, "The Frost Wyrm froze you solid.");
+        if (b.t > 70) wyrmState(b, "exhale");
+        break;
+      case "exhale":
+        if (b.t > 30){ wyrmState(b, "fly"); b.nextAttackIn = (40 + Math.random() * 50) / mul; }
+        break;
+      case "rear":        // the tell: rears up, then dives at where you stand
+        faceP();
+        b.y -= 0.6 * dt;
+        if (b.t > (b.phase2 ? 26 : 36)){
+          var tx = pcx, ty = WYRM_SLIDE_Y, dx = tx - b.x, dy = ty - b.y, d = Math.hypot(dx, dy) || 1;
+          var sp = 8.5 * mul;
+          b.vx = dx / d * sp; b.vy = dy / d * sp;
+          wyrmState(b, "dive");
+        }
+        break;
+      case "dive":
+        b.x += b.vx * dt; b.y += b.vy * dt;
+        if (b.y >= WYRM_SLIDE_Y){
+          b.y = WYRM_SLIDE_Y; b.vy = 0;
+          if (Math.abs(b.vx) < 3) b.vx = b.facing * 3;
+          shake = 14; SFX.play("slam", near(b.x, b.y));
+          wyrmState(b, "slide");
+        }
+        break;
+      case "slide":
+        b.x += b.vx * dt;
+        b.vx *= Math.pow(0.93, dt);
+        if (b.t > 32) wyrmState(b, "rest");
+        break;
+      case "rest":
+        if (b.t > (b.phase2 ? 55 : 85)) wyrmState(b, "rise");
+        break;
+      case "rise":
+        if (flyTo(b.x, WYRM_HOVER, 0.06, 4) || b.t > 60){ wyrmState(b, "fly"); b.nextAttackIn = 50 / mul; }
+        break;
+      case "icicles":
+        faceP();
+        flyTo(b.x, WYRM_HOVER - 30, 0.05, 3);
+        if (b.t >= 18 && !b.fired){ b.fired = true; spawnIcicles(b); }
+        if (b.t > 70){ wyrmState(b, "fly"); b.nextAttackIn = (40 + Math.random() * 40) / mul; }
+        break;
+    }
+    b.x = Math.max(lo, Math.min(hi, b.x));
+
+    // getting hit
+    var box = wyrmBox(b);
+    if (b.state !== "waiting" && b.state !== "intro" && b.invuln <= 0){
+      if (hitbox && intersects(hitbox, box)) damageWyrm(b, 22);
+      else if (player.superMode && intersects(player, box)) damageWyrm(b, 40);
+    }
+    if (b.state === "dead") return;
+    if ((b.state === "dive" || b.state === "slide") && intersects(player, wyrmHeadBox(b)))
+      hurtPlayer(b.x, "The Frost Wyrm ran you down.");
+  }
+
+  function updateIcicles(dt){
+    for (var i = icicles.length - 1; i >= 0; i--){
+      var c = icicles[i];
+      c.t += dt;
+      if (c.t < c.delay) continue;
+      c.vy += 0.55 * dt; c.y += c.vy * dt;
+      if (intersects(player, rect(c.x - 8, c.y - 34, 16, 34))){
+        hurtPlayer(c.x, "An icicle speared you.");
+        c.y = GROUND_Y + 1;
+      }
+      if (c.y >= GROUND_Y){
+        for (var k = 0; k < 8; k++){
+          explosionParticles.push({ x: c.x, y: GROUND_Y - 4, vx: (Math.random()-0.5)*4, vy: -Math.random()*3.5,
+            life: 18 + Math.random()*12, maxLife: 30, size: 1.5 + Math.random()*2, color: "215,245,255" });
+        }
+        icicles.splice(i, 1);
+      }
+    }
+  }
+
+  function drawIcicles(){
+    for (var i = 0; i < icicles.length; i++){
+      var c = icicles[i], sx = c.x - camX;
+      // shadow on the ice grows as it gets ready to fall
+      var warn = Math.min(1, c.t / c.delay);
+      ctx.fillStyle = "rgba(10,30,60," + (0.25 + 0.3 * warn).toFixed(2) + ")";
+      ctx.beginPath(); ctx.ellipse(sx, GROUND_Y + 2, 6 + 10 * warn, 4, 0, 0, Math.PI * 2); ctx.fill();
+      var jit = c.t < c.delay ? (Math.random() - 0.5) * 2 : 0;
+      ctx.save();
+      ctx.translate(sx + jit, c.y);
+      var g = ctx.createLinearGradient(0, -40, 0, 0);
+      g.addColorStop(0, "rgba(200,240,255,0.95)"); g.addColorStop(1, "rgba(120,200,255,0.95)");
+      ctx.fillStyle = g;
+      ctx.strokeStyle = "rgba(30,70,110,0.9)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(-9, -40); ctx.lineTo(9, -40); ctx.lineTo(0, 0); ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function wyrmPose(b){
+    switch (b.state){
+      case "waiting": case "fly": case "rise": case "breathPos":
+        return Math.floor(b.anim * 0.05) % 2 ? "fly1" : "fly0";
+      case "intro": return "roar";
+      case "charge": return "charge";
+      case "breath": return "breath";
+      case "exhale": return "exhale";
+      case "rear": return "roar";
+      case "dive": return "fly0";
+      case "slide": case "rest": return "slither";
+      case "icicles": return "aura";
+      case "dead": return b.dead_t < 70 ? "die0" : "die1";
+    }
+    return "fly0";
+  }
+
+  function drawWyrm(b){
+    var key = wyrmPose(b), img = WYRM_SPRITES[key], S = WYRM_SCALE;
+    var sx = b.x - camX;
+    if (sx < -400 || sx > VW + 400) return;
+    // shadow on the floor
+    var air = Math.max(0, GROUND_Y - b.y);
+    ctx.fillStyle = "rgba(0,10,25," + Math.max(0.12, 0.45 - air / 600).toFixed(2) + ")";
+    ctx.beginPath(); ctx.ellipse(sx, GROUND_Y + 2, 110 - Math.min(60, air / 5), 10, 0, 0, Math.PI * 2); ctx.fill();
+    // cold glow while charging the breath
+    if (b.state === "charge"){
+      var cg = ctx.createRadialGradient(sx + b.facing * 30, b.y, 4, sx + b.facing * 30, b.y, 90);
+      cg.addColorStop(0, "rgba(160,230,255," + (0.3 + 0.3 * Math.sin(b.t * 0.6)).toFixed(2) + ")");
+      cg.addColorStop(1, "rgba(120,200,255,0)");
+      ctx.fillStyle = cg; ctx.fillRect(sx - 120, b.y - 120, 240, 240);
+    }
+    if (!img || !img.ready) return;
+    ctx.save();
+    var shudder = (b.state === "rear" || (b.state === "dead" && b.dead_t < 70)) ? (Math.random() - 0.5) * 4 : 0;
+    if (key === "die1"){
+      ctx.translate(sx, GROUND_Y + 6);
+      ctx.drawImage(img, -img.a[0] * S, -img.naturalHeight * S, img.naturalWidth * S, img.naturalHeight * S);
+      ctx.restore();
+      return;
+    }
+    ctx.translate(sx + shudder, b.y + (key === "slither" ? 0 : 0));
+    if (b.facing < 0) ctx.scale(-1, 1);
+    if (b.state === "dive") ctx.rotate(Math.max(-0.5, Math.min(0.6, Math.atan2(b.vy, Math.abs(b.vx)) * 0.7)));
+    if (b.hitFlash > 0) ctx.filter = "brightness(2) saturate(0.5)";
+    if (key === "breath") ctx.globalAlpha = Math.min(1, 0.3 + b.t / 8);
+    ctx.drawImage(img, -img.a[0] * S, -img.a[1] * S, img.naturalWidth * S, img.naturalHeight * S);
     ctx.restore();
   }
 
@@ -2756,10 +3164,10 @@
 
   // ---------- Render ----------
   // Tall ice cave: scrolls sideways with camX and up with camY.
-  function drawFrostBackdrop(){
-    var bd = BACKDROPS.frost;
+  function drawFrostBackdrop(key){
+    var bd = BACKDROPS[key || "frost"];
     if (bd.ready){
-      var topY = STAGES[FROST_STAGE].topY;
+      var topY = key ? STAGES[stageIndex].topY : STAGES[FROST_STAGE].topY;
       var up = topY ? Math.max(0, Math.min(1, camY / topY)) : 0;   // 0 = floor, 1 = summit
       var shiftX = WORLD_W - VW > 0 ? camX / (WORLD_W - VW) : 0;
       ctx.drawImage(bd.img, -shiftX * Math.max(0, bd.w - VW), -(bd.h - VH) * (1 - up), bd.w, bd.h);
@@ -2768,7 +3176,7 @@
       ctx.fillRect(0, 0, VW, VH);
     }
     // the ice art is bright: cool it down so the player and ledges read
-    ctx.fillStyle = "rgba(6,18,36,0.48)";
+    ctx.fillStyle = "rgba(6,18,36," + (bd.dim || 0.48) + ")";
     ctx.fillRect(0, 0, VW, VH);
     var vg = ctx.createLinearGradient(0, VH*0.55, 0, VH);
     vg.addColorStop(0, "rgba(4,10,24,0)");
@@ -2801,6 +3209,7 @@
   function drawBackground(){
     var backdrop = STAGES[stageIndex].backdrop;
     if (backdrop === "frost"){ drawFrostBackdrop(); return; }
+    if (backdrop === "den" || backdrop === "tundra"){ drawFrostBackdrop(backdrop); return; }
     if (backdrop && backdrop !== "forest"){
       var bd = BACKDROPS[backdrop];
       if (bd && bd.ready){
@@ -2878,9 +3287,15 @@
       ctx.drawImage(iceImg, sx - p.w * 0.05, p.y - ICE_TOP * sc + 2, dw, ih * sc);
     } else {
       var tw = 300, sc2 = tw / iw, step = 250;
+      ctx.save();
+      // stop at the ground piece's ends, so ice never bridges a pit
+      if (stagePits(STAGES[stageIndex]).length){
+        ctx.beginPath(); ctx.rect(sx - 12, p.y - 60, p.w + 24, 200); ctx.clip();
+      }
       for (var x = -30; x < p.w; x += step){
         ctx.drawImage(iceImg, sx + x, p.y - ICE_TOP * sc2 + 2, tw, ih * sc2);
       }
+      ctx.restore();
     }
   }
 
@@ -2937,10 +3352,12 @@
     var pits = stagePits(STAGES[stageIndex]);
     var drop = STAGES[stageIndex].dropPit;
     var pulse = 0.75 + 0.25 * Math.sin(timeAlive * 0.08);
+    var icy = isFrostStage(stageIndex);
     for (var i = 0; i < pits.length; i++){
       var sx = pits[i][0] - camX, w = pits[i][1] - pits[i][0];
       if (sx + w < 0 || sx > VW) continue;
       if (drop && drop.pit === i){ drawShaft(sx, w); continue; }
+      if (icy){ drawChasm(sx, w, i); continue; }
       var g = ctx.createLinearGradient(0, GROUND_Y, 0, VH);
       g.addColorStop(0, "rgba(10,4,4,0.9)");
       g.addColorStop(0.55, "rgba(140,30,6," + (0.85*pulse).toFixed(2) + ")");
@@ -2965,6 +3382,27 @@
         ctx.arc(ex, ey, 1.5 + ea, 0, Math.PI*2);
         ctx.fill();
       }
+    }
+  }
+
+  // Frozen stages: the gaps are bottomless ice chasms with snow blowing up.
+  function drawChasm(sx, w, i){
+    var g = ctx.createLinearGradient(0, GROUND_Y, 0, VH);
+    g.addColorStop(0, "rgba(4,10,22,0.95)");
+    g.addColorStop(1, "rgba(30,90,140,0.9)");
+    ctx.fillStyle = g;
+    ctx.fillRect(sx, GROUND_Y, w, VH - GROUND_Y);
+    var hg = ctx.createRadialGradient(sx + w/2, GROUND_Y + 30, 4, sx + w/2, GROUND_Y + 30, w * 0.9);
+    hg.addColorStop(0, "rgba(140,210,255,0.3)");
+    hg.addColorStop(1, "rgba(140,210,255,0)");
+    ctx.fillStyle = hg;
+    ctx.fillRect(sx - w*0.4, GROUND_Y - w*0.9, w*1.8, w*0.9 + 40);
+    for (var e = 0; e < 4; e++){
+      var t = (timeAlive*0.5 + e*2.6 + i*1.7) % 10;
+      var ex = sx + w*(0.2 + 0.2*e) + Math.sin(timeAlive*0.05 + e)*8;
+      var ey = GROUND_Y + 10 - t*9;
+      ctx.fillStyle = "rgba(235,250,255," + (Math.max(0, 1 - t/10)*0.9).toFixed(2) + ")";
+      ctx.beginPath(); ctx.arc(ex, ey, 1.6, 0, Math.PI*2); ctx.fill();
     }
   }
 
@@ -3076,8 +3514,38 @@
     ctx.restore();
   }
 
+  function golemPose(en){
+    if (!en.alive) return en.dead_t < 22 ? "die0" : "die1";
+    if (en.hurtT > 0) return "hurt";
+    if (en.atkT > 0) return en.atkT < GOLEM_WINDUP ? "raise" : "blade";
+    return ["walk0", "walk1", "walk2", "walk1"][Math.floor(en.walkCycle) % 4];
+  }
+  function drawGolem(en){
+    var life = 110;
+    if (!en.alive && en.dead_t > life) return;
+    var sx = en.x + en.w/2 - camX, footY = en.y + en.h;
+    if (sx < -90 || sx > VW + 90 || footY - camY < -40 || footY - camY > VH + 120) return;
+    var img = GOLEM_SPRITES[golemPose(en)];
+    ctx.save();
+    if (!en.alive) ctx.globalAlpha = Math.max(0, Math.min(1, (life - en.dead_t) / 30));
+    // shake while rearing back for a swing, so the tell reads
+    var jit = en.atkT > 0 && en.atkT < GOLEM_WINDUP ? (Math.random() - 0.5) * 2 : 0;
+    ctx.translate(sx + jit, footY + 3);
+    if (en.facing < 0) ctx.scale(-1, 1);
+    if (en.hitFlash > 0) ctx.filter = "brightness(2) saturate(0.5)";
+    if (img && img.ready){
+      var S = GOLEM_SCALE;
+      ctx.drawImage(img, -img.footX * S, -img.naturalHeight * S, img.naturalWidth * S, img.naturalHeight * S);
+    } else {
+      ctx.fillStyle = "#6fb6d8";
+      ctx.fillRect(-en.w/2, -en.h, en.w, en.h);
+    }
+    ctx.restore();
+  }
+
   function drawEnemy(en){
     if (en.flyer){ drawFlyer(en); return; }
+    if (en.golem){ drawGolem(en); return; }
     if (en.dead_t > 18) return;
     var sx = en.x - camX;
     if (sx + en.w < -20 || sx > VW+20) return;
@@ -3517,7 +3985,7 @@
   // Snowfall: a stateless field of flakes driven by time, drifting with the
   // camera so climbing feels like moving through it.
   function drawSnow(){
-    var a = STAGES[stageIndex].backdrop === "frost" ? 1 : stageIndex === 2 ? freezeT : 0;
+    var a = isFrostStage(stageIndex) ? 1 : stageIndex === 2 ? freezeT : 0;
     if (a <= 0) return;
     var t = timeAlive;
     ctx.save();
@@ -3539,8 +4007,40 @@
     ctx.restore();
   }
 
+  // The gate stays sealed in ice while the Frost Wyrm lives.
+  function gateSealed(){
+    return !!(boss && boss.kind === "wyrm" && (boss.state !== "dead" || boss.dead_t < 70));
+  }
+
   // The Obsidian Gate: a black stone arch with a swirling violet portal.
   function drawFinishGate(){
+    drawGatePortal();
+    var fin = STAGES[stageIndex].finish;
+    if (fin === undefined || !gateSealed()) return;
+    // ice slab over the portal
+    var cx = fin + 30 - camX, base = GROUND_Y, w = 90, h = 170;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(cx - w/2 + 6, base);
+    ctx.lineTo(cx - w/2 + 6, base - h + w/2);
+    ctx.arc(cx, base - h + w/2, w/2 - 6, Math.PI, 0);
+    ctx.lineTo(cx + w/2 - 6, base);
+    ctx.closePath();
+    var ig = ctx.createLinearGradient(cx - w/2, base - h, cx + w/2, base);
+    ig.addColorStop(0, "rgba(220,248,255,0.92)");
+    ig.addColorStop(0.5, "rgba(130,200,240,0.88)");
+    ig.addColorStop(1, "rgba(70,140,200,0.92)");
+    ctx.fillStyle = ig;
+    ctx.fill();
+    ctx.clip();
+    ctx.strokeStyle = "rgba(255,255,255,0.6)";
+    ctx.lineWidth = 2;
+    [[-30, -150, 10, -60], [5, -120, 30, -40], [-20, -60, 20, -10]].forEach(function(l){
+      ctx.beginPath(); ctx.moveTo(cx + l[0], base + l[1]); ctx.lineTo(cx + l[2], base + l[3]); ctx.stroke();
+    });
+    ctx.restore();
+  }
+  function drawGatePortal(){
     var fin = STAGES[stageIndex].finish;
     if (fin === undefined) return;
     var cx = fin + 30 - camX, base = GROUND_Y, w = 90, h = 170;
