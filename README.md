@@ -54,7 +54,7 @@ No build step — it's a static page. Either:
 - **Arrow keys / A, D** — move left and right
 - **Arrow Up** — jump
 - **Space** — attack
-- **X** — once you've defeated 4+ imps, ignite into the fire-elemental form for 15 seconds (moves much faster, and simply touching an enemy kills it instantly with no damage taken). When the timer runs out you revert to normal and the imp counter resets to 0.
+- **X** — once you've defeated 4+ imps, ignite into the fire-elemental form for 8 seconds (moves much faster, and simply touching an enemy kills it instantly with no damage taken). When the timer runs out you revert to normal and the imp counter resets to 0.
 - **R** — restart after game over or a win
 - **Phones / tablets** — on-screen buttons appear automatically on touch screens
 

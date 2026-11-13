@@ -1765,7 +1765,7 @@
   var GRAVITY = 0.62;
   var MOVE_SPEED = 4.2;
   var SUPER_SPEED_MULT = 2.1; // fire-elemental form moves much faster
-  var SUPER_MODE_DURATION = 15 * 60; // fire form lasts 15 real seconds (dt ~ 1 per frame @60fps)
+  var SUPER_MODE_DURATION = 8 * 60;  // fire form lasts 8 real seconds (dt ~ 1 per frame @60fps)
   var JUMP_V = -13.2;
   var MAX_FALL = 16;
 
@@ -1865,7 +1865,7 @@
   // player permanently into the fire-elemental form, with a one-shot
   // particle explosion + screen shake for impact. While ignited the player
   // moves much faster and is overpowered: simply touching an enemy kills it
-  // instantly instead of costing a hit. The form lasts 15 seconds, after
+  // instantly instead of costing a hit. The form lasts 8 seconds, after
   // which the player reverts to normal and the imp counter resets to 0.
   function triggerSuperMode(){
     SFX.play("ignite");
