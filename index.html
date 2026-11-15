@@ -1092,17 +1092,35 @@
   // that repeats along the ground (the parts outside it taper)
   var ROCK_ENDS = [85, 618], ROCK_MID = [160, 560];
 
+  // Each frame has a different amount of empty space under the feet, so the
+  // feet would land at different heights. feetPad measures it (source px,
+  // from the lowest row with a few solid pixels, ignoring any full-width
+  // line) so drawPlayer can stand every frame on the same line.
+  function feetPad(im){
+    try {
+      var c = document.createElement("canvas"); c.width = im.naturalWidth; c.height = im.naturalHeight;
+      var g = c.getContext("2d"); g.drawImage(im, 0, 0);
+      var d = g.getImageData(0, 0, c.width, c.height).data;
+      for (var y = c.height - 1; y >= 0; y--){
+        var n = 0;
+        for (var x = 0; x < c.width; x++) if (d[(y * c.width + x) * 4 + 3] > 150) n++;
+        if (n >= 3 && n < c.width * 0.8) return c.height - 1 - y;
+      }
+    } catch(e){}
+    return 0;
+  }
+
   // Player character sprites (shadow-creature artwork). The art faces LEFT natively;
   // we mirror it when the player faces right. Draw size = naturalWidth/2, naturalHeight/2
   // (bitmaps are saved at 2x for crispness).
   var PLAYER_SPRITES = {};
   (function(){
     var sources = {
-      walk0:   "assets/player_walk0.png",
-      walk2:   "assets/player_walk2.png",
-      walk4:   "assets/player_walk4.png",
-      walk6:   "assets/player_walk6.png",
-      idle:    "assets/player_idle.png",
+      walk0:   "assets/player_walk0.png?v=2",
+      walk2:   "assets/player_walk2.png?v=2",
+      walk4:   "assets/player_walk4.png?v=2",
+      walk6:   "assets/player_walk6.png?v=2",
+      idle:    "assets/player_idle.png?v=2",   // standing pose from main_sprite.png
       jump:    "assets/player_jump.png",
       attack0: "assets/player_attack0.png",
       attack4: "assets/player_attack4.png",
@@ -1112,7 +1130,7 @@
     Object.keys(sources).forEach(function(key){
       var im = new Image();
       im.ready = false;
-      im.onload = function(){ im.ready = true; };
+      im.onload = function(){ im.padB = feetPad(im); im.ready = true; };
       im.src = sources[key];
       PLAYER_SPRITES[key] = im;
     });
@@ -1136,7 +1154,7 @@
     Object.keys(sources).forEach(function(key){
       var im = new Image();
       im.ready = false;
-      im.onload = function(){ im.ready = true; };
+      im.onload = function(){ im.padB = feetPad(im); im.ready = true; };
       im.src = sources[key];
       FIRE_SPRITES[key] = im;
     });
@@ -4729,6 +4747,7 @@
   // Most cropped frames face left natively; the reach/attack row (and the crawl death
   // frame cropped from it) was drawn facing right instead, so it needs the opposite flip.
   var SPRITE_FACES_RIGHT = {
+    idle: true,                       // the standing pose from main_sprite.png faces right
     attack0: true, attack4: true, death: true,
     walk0: true, walk2: true, walk4: true, walk6: true, jump: true
   };
@@ -4742,6 +4761,7 @@
     walk0: true, walk2: true, walk4: true, walk6: true, jump: true
   };
 
+  var PLAYER_FOOT_LIFT = 7;   // display px between the hitbox bottom and the feet
   function drawPlayer(){
     var sx = player.x - camX;
     var blink = player.invuln > 0 && player.invuln <= 50 && Math.floor(player.invuln/4) % 2 === 0;
@@ -4763,7 +4783,10 @@
       var nativeRight = !!facesRight[key];
       var wantRight = player.facing === 1;
       if (wantRight !== nativeRight) ctx.scale(-1, 1);
-      ctx.drawImage(img, -dW/2, -dH, dW, dH);
+      // stand the feet on one line for every frame: the walk frames looked
+      // right with their feet ~7px above the hitbox bottom, so all frames use that
+      var lift = (img.padB || 0) / 2 - PLAYER_FOOT_LIFT;
+      ctx.drawImage(img, -dW/2, -dH + lift, dW, dH);
     } else {
       // fallback silhouette while sprites decode
       ctx.fillStyle = "#1b1f2a";
