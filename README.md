@@ -27,7 +27,7 @@ The route: Ember Hollow, down into the golem's room, beat it, climb the Frozen S
 5. **Ashen Woods**: grey forest east of Ember Hollow. Its last lava gap is too wide for one jump: you need the golem's double jump to reach Cinder Cliffs.
 6. **Cinder Cliffs**: red-lit cliffs with winged imps; the last pit is a shaft down into The Chute.
 7. **The Chute**: a narrow, tall shaft. Work your way down the ledges past winged imps; the pit at the bottom drops into the Obsidian Gate. Double-jump up out of the top to go back to Cinder Cliffs.
-8. **Obsidian Gate**: frozen wastes with frost golems and wisps, then the **Frost Wyrm**. Its portal stays sealed in ice until the wyrm is dead; step through it to enter the shadow realm.
+8. **Obsidian Gate**: frozen wastes with frost golems and wisps, then the **Frost Wyrm**. When the wyrm bursts apart it flings out its still-beating **frozen heart**: touch it to fill your flask and deepen it by one more hit (6 after both hearts); the flask stretches taller with a blue glow. Its portal stays sealed in ice until the wyrm is dead; step through it to enter the shadow realm.
 9. **Frozen Den**: an icy side cave west of the golem's room. Climb its ice ledges to the top left to find the **world map**: once you have it, press **M** (or tap the map button) to open a map of the stages you've visited, with a marker showing where you are. The game pauses while it's open.
 10. **Haunted Graves** (H): you step out of the portal into a violet graveyard of floating islands over a bottomless void. At the far end the islands climb to a beam of light: jump up out of the top into Shadow Cliffs. The shadow realm sits on its own in the north-west of the world map.
 11. **Shadow Cliffs** (J): you pop up out of a shaft (drop back down it to return to the graves). Cross broken cliffs over the void, with a high road above, and exit east.
@@ -92,6 +92,7 @@ assets/          all sprite sheets, art, and audio referenced by index.html
 | `graves_background.jpg`, `cliffs_background.jpg`, `cathedral_background.jpg` | Shadow realm backdrops (stages H, J, K) |
 | `plat_*.png` | Shadow realm ledges and ground: floating grave islands (H), cliff chunks (J), cathedral slabs (K) |
 | `wraith_*.png` | Wraith Knight poses (float, raise, slash, glide, hurt, death, remains); all face right |
+| `iceheart_0.png`–`iceheart_7.png` | The Frost Wyrm's frozen heart, 8 pulsing frames |
 | `soul_*.png` | The knight's lost-soul projectiles: gather, fly and burst frames |
 | `rock.png` | Tiled platform/lava-rock art |
 | `flask_0.png`–`flask_4.png` | Life flask HUD, indexed by hits remaining (0 = empty, 4 = full). After the heart, the taller 5-hit flask is built in code from `flask_0` and `flask_4` |

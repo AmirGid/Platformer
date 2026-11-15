@@ -1926,9 +1926,7 @@
     if (gameState === "playing" && intersects(player, heartBox())){
       heart.state = "taken"; heart.t = 0;
       SFX.play("heal");
-      if (!player.bigFlask){            // the golem's heart deepens the flask to 5 hits
-        player.bigFlask = true; player.flaskGrowT = 0; player.maxHp = 5;
-      }
+      growFlask(player);                // the golem's heart deepens the flask by one hit
       player.hp = player.maxHp;
       player.invuln = Math.max(player.invuln, 30);
       shake = Math.max(shake, 8);
@@ -1999,6 +1997,125 @@
     }
   }
 
+  // ---------- The Frost Wyrm's heart ----------
+  // Flung out when the wyrm bursts apart, it lands on the ice and keeps
+  // beating, glowing brighter on each beat (8 frames). Touching it fills the
+  // flask and deepens it by one more hit, like the golem's heart.
+  var ICE_HEART_SCALE = 0.4;
+  var ICE_HEART_FRAMES = [0, 1, 2, 3, 4, 5, 6, 7].map(function(i){
+    var im = new Image();
+    im.ready = false;
+    im.onload = function(){ im.ready = true; };
+    im.src = "assets/iceheart_" + i + ".png";
+    return im;
+  });
+  var ICE_HEART_STAGE = 7;
+  var iceHeart = null;
+  function dropIceHeart(b){
+    var lo = 1380, hi = WORLD_W - 200;                 // stay in the arena, clear of the pit and the gate
+    var dir = b.x > (lo + hi) / 2 ? -1 : 1;
+    iceHeart = { x: Math.max(lo, Math.min(hi, b.x)), y: GROUND_Y - 120, vx: dir * 3.2, vy: -10,
+      rot: 0, dir: dir, state: "fly", t: 0, lo: lo, hi: hi };
+  }
+  function iceHeartBox(){ return rect(iceHeart.x - 30, GROUND_Y - 64, 60, 64); }
+  function iceSpray(count, power, y){
+    for (var i = 0; i < count; i++){
+      var ang = -Math.PI * Math.random(), sp = 1 + Math.random() * power, life = 20 + Math.random() * 25;
+      explosionParticles.push({ x: iceHeart.x, y: y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+        life: life, maxLife: life, size: 1.5 + Math.random() * 3, color: ["235,250,255", "150,215,255", "80,160,230"][i % 3] });
+    }
+  }
+  // the lub-dub: two quick swells per beat, like the golem's heart
+  function iceHeartBeat(t){
+    var ph = t % 66;
+    if (ph < 8) return 1 + 0.12 * Math.sin(ph / 8 * Math.PI);
+    if (ph >= 14 && ph < 22) return 1 + 0.07 * Math.sin((ph - 14) / 8 * Math.PI);
+    return 1;
+  }
+  function updateIceHeart(dt){
+    var h = iceHeart;
+    if (!h || stageIndex !== ICE_HEART_STAGE) return;
+    h.t += dt;
+    if (h.state === "fly"){
+      h.vy += 0.45 * dt;
+      h.x += h.vx * dt; h.y += h.vy * dt;
+      h.rot += 0.2 * h.dir * dt;
+      if (h.x < h.lo || h.x > h.hi){ h.vx = -h.vx; h.dir = -h.dir; h.x = Math.max(h.lo, Math.min(h.hi, h.x)); }
+      if (h.y >= GROUND_Y - 34 && h.vy > 0){
+        h.state = "rest"; h.t = 0;
+        SFX.play("freeze", near(h.x, GROUND_Y));
+        shake = Math.max(shake, 6);
+        iceSpray(18, 4, GROUND_Y - 6);
+      }
+      return;
+    }
+    if (h.state === "taken"){
+      if (h.t > 40) iceHeart = null;
+      return;
+    }
+    if (h.t > 30){
+      var ph0 = (h.t - dt - 30) % 66, ph1 = (h.t - 30) % 66;
+      if (ph1 < ph0 || (ph0 < 14 && ph1 >= 14)) SFX.play("beat", near(h.x, GROUND_Y - 30) * (ph1 < ph0 ? 1 : 0.7));
+    }
+    if (gameState === "playing" && intersects(player, iceHeartBox())){
+      h.state = "taken"; h.t = 0;
+      SFX.play("heal");
+      growFlask(player, "90,190,255");   // the frozen heart deepens the flask by one more hit
+      player.hp = player.maxHp;
+      player.invuln = Math.max(player.invuln, 30);
+      shake = Math.max(shake, 8);
+      buzz(80);
+      iceSpray(40, 6, GROUND_Y - 30);
+    }
+  }
+  function drawIceHeart(){
+    var h = iceHeart;
+    if (!h || stageIndex !== ICE_HEART_STAGE) return;
+    var sx = h.x - camX;
+    if (sx < -100 || sx > VW + 100) return;
+    var beat = h.state === "rest" && h.t > 30 ? iceHeartBeat(h.t - 30) : 1;
+    // the 8 frames brighten and dim in turn; on a beat it jumps to the brightest
+    var fi = h.state === "rest" ? (beat > 1.03 ? 6 : Math.floor(h.t * 0.12) % 8) : 0;
+    var img = ICE_HEART_FRAMES[fi], S = ICE_HEART_SCALE * beat;
+    var cy = h.state === "fly" ? h.y : GROUND_Y - 34;
+    ctx.save();
+    var glowA = h.state === "taken" ? 0 : 0.22 + 0.4 * (beat - 1) / 0.12;
+    if (glowA > 0){
+      var g = ctx.createRadialGradient(sx, cy, 4, sx, cy, 70);
+      g.addColorStop(0, "rgba(160,225,255," + glowA.toFixed(2) + ")");
+      g.addColorStop(1, "rgba(100,180,255,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(sx - 70, cy - 70, 140, 140);
+    }
+    if (img.ready){
+      var w = img.naturalWidth * S, hh = img.naturalHeight * S;
+      if (h.state === "rest"){
+        ctx.translate(sx, GROUND_Y + 4);                // sits on the ice, swelling from its base
+        ctx.drawImage(img, -w / 2, -hh, w, hh);
+      } else {
+        ctx.translate(sx, cy);
+        if (h.state === "fly") ctx.rotate(h.rot);
+        if (h.state === "taken"){ var k = 1 + h.t / 40 * 0.8; ctx.scale(k, k); ctx.globalAlpha = Math.max(0, 1 - h.t / 40); }
+        ctx.drawImage(img, -w / 2, -hh / 2, w, hh);
+      }
+    } else {
+      ctx.fillStyle = "#8fd3ff";
+      ctx.beginPath(); ctx.arc(sx, cy, 16, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+    if (h.state === "taken"){
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, 1 - h.t / 40);
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#dff4ff";
+      ctx.shadowColor = "rgba(80,170,255,0.9)";
+      ctx.shadowBlur = 10;
+      ctx.font = "12px 'Press Start 2P', monospace";
+      ctx.fillText("FLASK +1", sx, GROUND_Y - 90 - h.t * 0.8);
+      ctx.restore();
+    }
+  }
+
   // ---------- Player ----------
   var GRAVITY = 0.62;
   var MOVE_SPEED = 4.2;
@@ -2025,7 +2142,7 @@
       invuln:0, attackT:0, attackCd:0, walkCycle:0,
       superMode:false, superTimer:0,
       canDoubleJump:false, airJumpUsed:false, upHeld:false, doubleJumps:0,
-      bigFlask:false, flaskGrowT:0, fillShown:1,
+      bigFlask:false, flaskGrowT:0, fillShown:1, flaskFrom:0, flaskTo:0, liquidRows:0, flaskGlow:null,
       hasMap:false, visited:{}
     };
     mapOpen = false;
@@ -2055,6 +2172,7 @@
     freezeT = 0;
     arenaFrozen = false;
     heart = null;
+    iceHeart = null;
     loadStage(0, "left");
     gameState = "playing";
   }
@@ -2834,6 +2952,7 @@
 
     if (boss && gameState === "playing") updateBoss(dt, hitbox);
     updateHeart(dt);
+    updateIceHeart(dt);
     updateFlask(dt);
 
     var targetCam = player.x + player.w/2 - VW/2;
@@ -3365,7 +3484,7 @@
       b.dead_t += dt;
       // the shattered body drops to the ice, then bursts into rubble
       if (b.y < GROUND_Y - 82){ b.vy += 0.4 * dt; b.y = Math.min(GROUND_Y - 82, b.y + b.vy * dt); }
-      if (before < 70 && b.dead_t >= 70){ shake = 26; wyrmBurst(b.x, GROUND_Y - 50, 80, 8); SFX.play("explosion"); }
+      if (before < 70 && b.dead_t >= 70){ shake = 26; wyrmBurst(b.x, GROUND_Y - 50, 80, 8); SFX.play("explosion"); dropIceHeart(b); }
       return;
     }
     var mul = b.phase2 ? 1.3 : 1;
@@ -4479,17 +4598,40 @@
   // tube is stretched, and the liquid is painted onto the glass pixels only
   // (so the bone, scale marks and roots stay in front), cut at any level.
   var FLASK_BAND = [88, 96];        // source rows of plain tube that stretch
-  var FLASK_EXTRA = 56;             // extra source rows once fully grown
+  var FLASK_EXTRA = 56;             // extra source rows per hit above 4
   var FLASK_FULL_Y = 74, FLASK_EMPTY_Y = 192;   // liquid top when full / empty
   var FLASK_TUBE = [46, 102];       // inside of the tube, source x
   var FLASK_GROW = 50;              // frames for the flask to stretch
   var flaskLayers = null;           // { body, top } liquid canvases
 
+  // Each heart adds a hit: the tube stretches by FLASK_EXTRA rows per hit
+  // above 4, animating from the old height to the new one.
+  function flaskRange(extra){ return FLASK_EMPTY_Y + extra - FLASK_FULL_Y; }   // liquid rows when full
+  function flaskExtraNow(p){
+    if (!p.bigFlask) return 0;
+    var g = Math.min(1, p.flaskGrowT / FLASK_GROW);
+    // ease out with a little overshoot, like glass being drawn out
+    var ease = 1 + 2.2 * Math.pow(g - 1, 3) + 1.2 * Math.pow(g - 1, 2);
+    return p.flaskFrom + (p.flaskTo - p.flaskFrom) * ease;
+  }
+  function growFlask(p, glow){
+    var from = flaskExtraNow(p);
+    p.liquidRows = p.fillShown * flaskRange(from);   // the blood keeps its height while the glass grows
+    p.maxHp += 1;
+    p.bigFlask = true;
+    p.flaskFrom = from;
+    p.flaskTo = FLASK_EXTRA * (p.maxHp - 4);
+    p.flaskGrowT = 0;
+    p.flaskGlow = glow || "255,60,60";
+  }
   function updateFlask(dt){
     var p = player;
     if (p.bigFlask && p.flaskGrowT < FLASK_GROW + 200) p.flaskGrowT += dt;
     var target = Math.max(0, p.hp / p.maxHp);
-    if (p.bigFlask && p.flaskGrowT < FLASK_GROW) return;   // grow first, then fill
+    if (p.bigFlask && p.flaskGrowT < FLASK_GROW){            // grow first, then fill
+      p.fillShown = Math.min(1, p.liquidRows / flaskRange(flaskExtraNow(p)));
+      return;
+    }
     var rate = target > p.fillShown ? 0.011 : 0.03;
     if (p.fillShown < target) p.fillShown = Math.min(target, p.fillShown + rate * dt);
     else p.fillShown = Math.max(target, p.fillShown - rate * dt);
@@ -4557,16 +4699,15 @@
       if (!flaskLayers) buildFlaskLayers();
       var W = empty.naturalWidth, H = empty.naturalHeight, k = dispH / H;
       var g = Math.min(1, p.flaskGrowT / FLASK_GROW);
-      // ease out with a little overshoot, like glass being drawn out
-      var ease = 1 + 2.2 * Math.pow(g - 1, 3) + 1.2 * Math.pow(g - 1, 2);
-      var extra = FLASK_EXTRA * ease;
+      var extra = flaskExtraNow(p);
+      var glowRGB = p.flaskGlow || "255,60,60";
       var dispW = W * k, boxH = (H + extra) * k + padTop + padBottom;
       var growing = p.flaskGrowT < FLASK_GROW + 60;
 
       ctx.save();
       if (growing){
         var glow = Math.max(0, 1 - Math.max(0, p.flaskGrowT - FLASK_GROW) / 60);
-        ctx.shadowColor = "rgba(255,60,60," + (0.9 * glow).toFixed(2) + ")";
+        ctx.shadowColor = "rgba(" + glowRGB + "," + (0.9 * glow).toFixed(2) + ")";
         ctx.shadowBlur = 22 * glow;
       }
       ctx.fillStyle = "rgba(10,8,14,0.5)";
@@ -4621,7 +4762,7 @@
           var a = Math.max(0, 1 - Math.max(0, p.flaskGrowT - FLASK_GROW) / 60) * Math.sin(t * Math.PI);
           var sx = fx + dispW * (0.3 + 0.45 * ((s * 37) % 10) / 10);
           var sy = fy + (H + extra) * k * (0.8 - 0.6 * t);
-          ctx.fillStyle = "rgba(255,190,190," + (0.85 * a).toFixed(2) + ")";
+          ctx.fillStyle = glowRGB === "255,60,60" ? "rgba(255,190,190," + (0.85 * a).toFixed(2) + ")" : "rgba(200,240,255," + (0.9 * a).toFixed(2) + ")";
           ctx.beginPath(); ctx.arc(sx, sy, 1.8, 0, Math.PI * 2); ctx.fill();
         }
       }
@@ -4686,6 +4827,7 @@
     enemies.forEach(drawEnemy);
     drawBoss();
     drawHeart();
+    drawIceHeart();
     if (gameState !== "start") drawPlayer();
     drawBossAttacks();
     drawExplosionFx();
