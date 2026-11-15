@@ -2601,24 +2601,35 @@
     "8":    { x: 0,   y: 104, w: 112, h: 56, name: "Frozen Den",    color: "#2f6080" },
     "6":    { x: 429, y: 64,  w: 34,  h: 32, name: "",              color: "#3a1a44" },
     "7":    { x: 390, y: 104, w: 112, h: 56, name: "Obsidian Gate", color: "#2f5a7a" },
-    // the shadow realm, reached only through the Obsidian Gate's portal
-    "9":    { x: 0,   y: -84,  w: 112, h: 56, name: "Haunted Graves", color: "#3b2d55" },
-    "10":   { x: 0,   y: -168, w: 112, h: 56, name: "Shadow Cliffs",  color: "#2c2342" },
-    "11":   { x: 130, y: -168, w: 112, h: 56, name: "Cathedral",      color: "#4b2a62" }
+    // the shadow realm, reached only through the Obsidian Gate's portal:
+    // far off in the top right corner, cut off from the rest of the world
+    "9":    { x: 760, y: -150, w: 112, h: 56, name: "Haunted Graves", color: "#3b2d55", realm: true },
+    "10":   { x: 760, y: -250, w: 112, h: 56, name: "Shadow Cliffs",  color: "#2c2342", realm: true },
+    "11":   { x: 890, y: -250, w: 112, h: 56, name: "Cathedral",      color: "#4b2a62", realm: true }
   };
   // doors between rooms: [roomA, roomB, x, y, vertical]
   var MAP_DOORS = [
     ["0", "1", 121, 28, false], ["1", "4", 251, 28, false], ["4", "5", 381, 28, false],
     ["1", "boss", 186, 60, true], ["8", "boss", 121, 132, false],
     ["5", "6", 446, 60, true], ["6", "7", 446, 100, true],
-    ["9", "10", 56, -98, true], ["10", "11", 121, -140, false]
+    ["9", "10", 816, -172, true], ["10", "11", 881, -222, false]
   ];
 
   function drawWorldMap(){
     var visited = player.visited, here = mapKey(stageIndex);
-    // the shadow realm sits above the rest: grow the map once it's been found
-    var north = visited["9"] || visited["10"] || visited["11"];
-    var pw = 600, ph = north ? 434 : 330, px = VW/2 - pw/2, py = VH/2 - ph/2;
+    // Fit whatever has been visited: once the far-off shadow realm is found
+    // the map widens and shrinks a little to show it in its distant corner.
+    var minX = 0, minY = 0, maxX = 502, maxY = 160;
+    Object.keys(MAP_ROOMS).forEach(function(k){
+      if (!visited[k]) return;
+      var r = MAP_ROOMS[k];
+      minX = Math.min(minX, r.x); minY = Math.min(minY, r.y);
+      maxX = Math.max(maxX, r.x + r.w); maxY = Math.max(maxY, r.y + r.h);
+    });
+    var north = minY < 0;
+    var S = Math.min(1, 860 / (maxX - minX), 408 / (maxY - minY));
+    var pw = Math.max(600, (maxX - minX) * S + 60), ph = north ? (maxY - minY) * S + 110 : 330;
+    var px = VW/2 - pw/2, py = VH/2 - ph/2;
     ctx.save();
     ctx.fillStyle = "rgba(0,0,0,0.5)";
     ctx.fillRect(0, 0, VW, VH);
@@ -2637,20 +2648,40 @@
     ctx.font = "14px 'Press Start 2P', monospace";
     ctx.fillText("WORLD MAP", VW/2, py + 34);
 
-    var ox = px + (pw - 502) / 2, oy = py + (north ? 62 + 168 : 76), S = 1;
+    var ox = px + (pw - (maxX - minX) * S) / 2 - minX * S, oy = py + (north ? 66 : 76) - minY * S;
+    // the shadow realm: a violet haze and a name over its lonely corner
+    var realmSeen = visited["9"] || visited["10"] || visited["11"];
+    if (realmSeen){
+      var rx0 = 1e9, ry0 = 1e9, rx1 = -1e9, ry1 = -1e9;
+      ["9", "10", "11"].forEach(function(k){
+        if (!visited[k]) return;
+        var r = MAP_ROOMS[k];
+        rx0 = Math.min(rx0, r.x); ry0 = Math.min(ry0, r.y); rx1 = Math.max(rx1, r.x + r.w); ry1 = Math.max(ry1, r.y + r.h);
+      });
+      var hcx = ox + (rx0 + rx1) / 2 * S, hcy = oy + (ry0 + ry1) / 2 * S;
+      var hr = Math.max(rx1 - rx0, ry1 - ry0) * S * 0.8 + 30;
+      var hz = ctx.createRadialGradient(hcx, hcy, 10, hcx, hcy, hr);
+      hz.addColorStop(0, "rgba(150,80,230," + (0.3 + 0.06 * Math.sin(timeAlive * 0.05)).toFixed(2) + ")");
+      hz.addColorStop(1, "rgba(90,30,160,0)");
+      ctx.fillStyle = hz;
+      ctx.fillRect(hcx - hr, hcy - hr, hr * 2, hr * 2);
+      ctx.fillStyle = "rgba(215,175,255,0.85)";
+      ctx.font = "7px 'Press Start 2P', monospace";
+      ctx.fillText("SHADOW REALM", hcx, oy + ry1 * S + 16);
+    }
+    var nameFont = Math.max(6, Math.round(7 * S));
     // doors first, under the rooms
     MAP_DOORS.forEach(function(d){
       if (!visited[d[0]] || !visited[d[1]]) return;
       ctx.fillStyle = "#e9d6a6";
-      if (d[4]) ctx.fillRect(ox + d[2] - 7, oy + d[3] - 6, 14, 12);
-      else ctx.fillRect(ox + d[2] - 7, oy + d[3] - 6, 14, 12);
+      ctx.fillRect(ox + d[2] * S - 7 * S, oy + d[3] * S - 6 * S, 14 * S, 12 * S);
     });
     Object.keys(MAP_ROOMS).forEach(function(k){
       if (!visited[k]) return;
-      var r = MAP_ROOMS[k], rx = ox + r.x, ry = oy + r.y;
+      var r = MAP_ROOMS[k], rx = ox + r.x * S, ry = oy + r.y * S, rw = r.w * S, rh = r.h * S;
       var color = r.color, name = r.name;
       if (k === "boss" && arenaFrozen){ color = "#2f6080"; name = "Frozen Spire"; }
-      roundRect(rx, ry, r.w, r.h, 5);
+      roundRect(rx, ry, rw, rh, 5);
       ctx.fillStyle = color;
       ctx.fill();
       ctx.lineWidth = k === here ? 3 : 1.5;
@@ -2658,8 +2689,8 @@
       ctx.stroke();
       if (name){
         ctx.fillStyle = "rgba(255,244,220,0.9)";
-        ctx.font = "7px 'Press Start 2P', monospace";
-        ctx.fillText(name.toUpperCase(), rx + r.w/2, ry + 14);
+        ctx.font = nameFont + "px 'Press Start 2P', monospace";
+        ctx.fillText(name.toUpperCase(), rx + rw/2, ry + 6 + nameFont);
       }
     });
 
@@ -2669,14 +2700,14 @@
       var st = STAGES[stageIndex], fx = Math.max(0.06, Math.min(0.94, (player.x + player.w/2) / WORLD_W));
       var fy = 0.82;
       if (st.topY) fy = Math.max(0.15, Math.min(0.9, (player.y + player.h - st.topY) / (GROUND_Y - st.topY)));
-      var mx = ox + room.x + room.w * fx, my = oy + room.y + room.h * fy;
+      var mx = ox + (room.x + room.w * fx) * S, my = oy + (room.y + room.h * fy) * S;
       var ring = (timeAlive * 0.05) % 1;
       ctx.strokeStyle = "rgba(255,230,140," + (1 - ring).toFixed(2) + ")";
       ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(mx, my - 6, 6 + ring * 12, 0, Math.PI * 2); ctx.stroke();
       var img = PLAYER_SPRITES.idle;
       if (img && img.ready){
-        var hgt = 22, wdt = hgt * img.naturalWidth / img.naturalHeight;
+        var hgt = 22 * Math.max(0.8, S), wdt = hgt * img.naturalWidth / img.naturalHeight;
         ctx.save();
         ctx.translate(mx, my + 4);
         if (!SPRITE_FACES_RIGHT.idle) ctx.scale(-1, 1);
