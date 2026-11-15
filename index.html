@@ -1030,6 +1030,19 @@
     Object.keys(anchors).forEach(function(k){ SOUL_SPRITES[k] = loadArt("assets/soul_" + k + ".png", { a: anchors[k] }); });
   })();
 
+  // Shadow realm enemies, both floating and facing RIGHT natively. The
+  // scythe wraith's a = its hooded head, in source px.
+  var SHADE_SCALE = 0.62, GHOST_SCALE = 0.64;
+  var SHADE_SPRITES = {}, GHOST_SPRITES = {};
+  (function(){
+    var heads = { float0: [150, 16], float1: [148, 16], float2: [150, 16], float3: [148, 16], glide: [122, 16],
+                  hurt: [142, 16], raise: [122, 56], slash: [128, 62], strike: [152, 16], burst: [112, 36] };
+    Object.keys(heads).forEach(function(k){ SHADE_SPRITES[k] = loadArt("assets/reaper_" + k + ".png", { a: heads[k] }); });
+    ["float0", "float1", "float2", "float3", "scream", "spit", "hurt", "burst"].forEach(function(k){
+      GHOST_SPRITES[k] = loadArt("assets/ghost_" + k + ".png");
+    });
+  })();
+
   // Flying imp sprites (native art faces RIGHT). anchor = the glowing eyes,
   // which stay put between wing flaps, in source pixels.
   var FLYER_SCALE = 0.5;
@@ -1192,6 +1205,9 @@
   //            (ground = 444, a platform at y = y - 26).
   //   flyers:  flying imps, each a loop of [x, y] spots it hovers at and
   //            flies between. Gets close and it swoops at you.
+  //   shades:  scythe wraiths: [spawnX, patrolLeft, patrolRight, speed,
+  //            surfaceY] (surfaceY = the y of the ground or ledge it floats over).
+  //   ghosts:  wailing ghosts, each a loop of [x, y] spots like flyers.
   //   tint:    optional colour washed over the backdrop.
   //   backdrop: "forest" (default) or "cavern".
   //   boss:    true = the Magma Golem lives here. Beating it freezes the
@@ -1501,19 +1517,18 @@
         [2420, 45, 150], [2180, -45, 150], [2420, -135, 150], [2200, -230, 140],
         [2160, -330, 170]
       ],
-      enemies: [
-        [400, 60, 800, 1.2, 444],
-        [500, 455, 575, 0.8, 274],     // [450,300]
-        [1200, 970, 1690, 1.5, 444],
-        [1340, 1295, 1425, 0.9, 264],  // [1290,290]
-        [2150, 1850, 2590, 1.3, 444],
-        [2230, 2195, 2325, 0.7, 104],  // [2190,130]
-        [2460, 2425, 2555, 0.8, -161]  // [2420,-135]
+      enemies: [],
+      shades: [
+        [400, 60, 800, 0.8, 470],
+        [1200, 970, 1690, 0.9, 470],
+        [1330, 1295, 1440, 0.5, 290],  // [1290,290]
+        [2150, 1850, 2590, 0.8, 470],
+        [2470, 2425, 2565, 0.5, -135]  // [2420,-135]
       ],
-      flyers: [
-        [[600, 200], [900, 240]],
-        [[1400, 200], [1650, 250]],
-        [[2300, -60], [2060, 40]]
+      ghosts: [
+        [[600, 220], [900, 250]],
+        [[1450, 210], [1700, 250]],
+        [[2320, -40], [2060, 60]]
       ]
     },
     {
@@ -1540,18 +1555,18 @@
         [1995, 350, 110],                                     // over the 4th pit
         [2250, 370, 150], [2450, 290, 120]
       ],
-      enemies: [
-        [500, 260, 690, 1.4, 444],
-        [1100, 870, 1290, 1.6, 444],
-        [1190, 1155, 1270, 0.9, 264],  // [1150,290]
-        [1400, 1340, 1470, 0.8, 74],   // [1330,100]
-        [1700, 1490, 1940, 1.5, 444],
-        [2350, 2150, 2590, 1.4, 444]
+      enemies: [],
+      shades: [
+        [500, 260, 690, 0.9, 470],
+        [1100, 870, 1290, 1.0, 470],
+        [1390, 1335, 1475, 0.5, 100],  // [1330,100] high road
+        [1700, 1490, 1940, 0.9, 470],
+        [2350, 2150, 2590, 0.9, 470]
       ],
-      flyers: [
-        [[650, 220], [950, 170]],
-        [[1450, 240], [1800, 190]],
-        [[2100, 230], [2400, 170]]
+      ghosts: [
+        [[650, 230], [950, 180]],
+        [[1450, 250], [1800, 200]],
+        [[2100, 230], [2400, 180]]
       ]
     },
     {
@@ -1652,6 +1667,143 @@
     if (en.vy > MAX_FALL) en.vy = MAX_FALL;
     moveAndCollide(en, allPlatforms);
     en.vx = saveVx;
+  }
+
+  // ---------- Shadow realm enemies ----------
+  // Scythe wraith: floats over its patch of ground; when you come close on
+  // its level it raises its scythe (the tell), then glides forward and
+  // swings. It never leaves its patch, so it can't drift into the void.
+  // Wailing ghost: drifts between spots; when it sees you it screams (the
+  // tell) and spits a cursed soul at you (swat it away). Both take two hits.
+  var SHADE_SIGHT = 170, SHADE_WINDUP = 28, SHADE_REACH = 92, GHOST_SIGHT = 320;
+  function makeShade(e){
+    var h = 56;
+    return { shade: true, x: e[0], y: e[4] - h - 6, baseY: e[4] - h - 6, w: 32, h: h, vx: 0, vy: 0,
+      lo: e[1], hi: e[2], speed: Math.abs(e[3]), dir: e[3] < 0 ? -1 : 1, facing: e[3] < 0 ? -1 : 1,
+      state: "drift", t: 0, anim: Math.random() * 40,
+      alive: true, hitFlash: 0, walkCycle: 0, dead_t: 0, hp: 2, hurtT: 0, atkT: 0, atkCd: 60 };
+  }
+  function shadeScytheBox(en){
+    var cx = en.x + en.w/2;
+    return rect(en.facing > 0 ? cx : cx - SHADE_REACH, en.y - 24, SHADE_REACH, en.h + 30);
+  }
+  function updateShade(en, dt){
+    en.t += dt; en.anim += dt;
+    if (en.hurtT > 0) en.hurtT -= dt;
+    if (en.atkCd > 0) en.atkCd -= dt;
+    var pcx = player.x + player.w/2, ecx = en.x + en.w/2;
+    var sameLevel = Math.abs((player.y + player.h) - (en.baseY + en.h + 6)) < 44;
+    if (en.hurtT > 0 && en.state === "raise"){ en.state = "drift"; en.t = 0; en.atkCd = 50; }   // knocked out of its swing
+    if (en.state === "drift"){
+      if (en.x <= en.lo) en.dir = 1;
+      if (en.x + en.w >= en.hi) en.dir = -1;
+      en.facing = en.dir;
+      if (en.hurtT <= 0) en.x += en.dir * en.speed * dt;
+      if (en.atkCd <= 0 && en.hurtT <= 0 && sameLevel && Math.abs(pcx - ecx) < SHADE_SIGHT && pcx > en.lo - 60 && pcx < en.hi + 60 && gameState === "playing"){
+        en.facing = pcx > ecx ? 1 : -1;
+        en.state = "raise"; en.t = 0;
+        SFX.play("screech", near(ecx, en.y) * 0.6);
+      }
+    } else if (en.state === "raise"){
+      en.facing = pcx > ecx ? 1 : -1;
+      en.x -= en.facing * 0.4 * dt;                  // leans back before the swing
+      if (en.t > SHADE_WINDUP){ en.state = "slash"; en.t = 0; en.swung = false; SFX.play("swing", near(ecx, en.y)); }
+    } else if (en.state === "slash"){
+      if (en.t < 10) en.x += en.facing * 6 * dt;     // glides into the swing
+      if (en.t > 2 && en.t < 13 && intersects(player, shadeScytheBox(en))) hurtPlayer(ecx, "A scythe wraith reaped you.");
+      if (en.t > 16){ en.state = "rest"; en.t = 0; }
+    } else if (en.state === "rest"){
+      if (en.t > 34){ en.state = "drift"; en.t = 0; en.atkCd = 100; }
+    }
+    en.x = Math.max(en.lo, Math.min(en.hi - en.w, en.x));
+    en.y = en.baseY + Math.sin(en.anim * 0.07) * 4;  // a slow bob in the air
+    en.vx = en.facing;   // knockback and drawing read vx for direction
+  }
+
+  function makeGhost(route, i){
+    var g = { ghost: true, route: route, leg: 0, state: "hover", t: -i * 30, cx: route[0][0], cy: route[0][1], w: 56, h: 52,
+      facing: 1, anim: i * 2.3, atkCd: 80 + i * 25, alive: true, hitFlash: 0, dead_t: 0, hp: 2, hurtT: 0, atkT: 0,
+      walkCycle: 0, vx: 0, vy: 0 };
+    g.x = g.cx - g.w/2; g.y = g.cy - g.h/2;
+    return g;
+  }
+  function updateGhost(g, dt){
+    g.anim += dt; g.t += dt;
+    if (g.atkCd > 0) g.atkCd -= dt;
+    if (g.hurtT > 0) g.hurtT -= dt;
+    var pcx = player.x + player.w/2, pcy = player.y + player.h/2;
+    var pdx = pcx - g.cx, pdy = pcy - g.cy, spotted = pdx*pdx + pdy*pdy < GHOST_SIGHT * GHOST_SIGHT;
+    var home = g.route[g.leg];
+    if (g.hurtT > 0 && g.state === "scream"){ g.state = "hover"; g.t = 0; g.atkCd = 90; }
+    if (g.state === "hover" || g.state === "fly"){
+      if (g.state === "hover"){
+        g.cx += (home[0] - g.cx) * Math.min(1, 0.06 * dt);
+        g.cy += (home[1] + Math.sin(g.anim * 0.06) * 10 - g.cy) * Math.min(1, 0.1 * dt);
+        if (g.t > 150 && g.route.length > 1){ g.state = "fly"; g.t = 0; g.leg = (g.leg + 1) % g.route.length; }
+      } else if (moveFlyerToward(g, home[0], home[1], 1.3, dt)){ g.state = "hover"; g.t = 0; }
+      if (spotted) g.facing = pdx > 0 ? 1 : -1;
+      if (spotted && g.atkCd <= 0 && g.hurtT <= 0 && g.t >= 0 && gameState === "playing"){
+        g.state = "scream"; g.t = 0;
+        SFX.play("screech", near(g.cx, g.cy));
+      }
+    } else if (g.state === "scream"){
+      g.facing = pdx > 0 ? 1 : -1;
+      if (g.t > 28){ g.state = "spit"; g.t = 0; spitBolt(g); }
+    } else if (g.state === "spit"){
+      if (g.t > 24){ g.state = "hover"; g.t = 0; g.atkCd = 160; }
+    }
+    g.vx = g.facing;
+    g.x = g.cx - g.w/2; g.y = g.cy - g.h/2;
+  }
+
+  // The ghosts' cursed souls: slow, aimed where you were. Swat them away.
+  var ghostBolts = [];
+  function spitBolt(g){
+    var mx = g.cx + g.facing * 34, my = g.cy - 4;
+    var dx = player.x + player.w/2 - mx, dy = player.y + player.h/2 - my, d = Math.hypot(dx, dy) || 1;
+    ghostBolts.push({ x: mx, y: my, vx: dx / d * 3.6, vy: dy / d * 3.6, t: 0, state: "fly", anim: Math.random() * 10 });
+    SFX.play("fireball", near(mx, my) * 0.6);
+  }
+  function updateGhostBolts(dt, hitbox){
+    for (var i = ghostBolts.length - 1; i >= 0; i--){
+      var b = ghostBolts[i];
+      b.t += dt; b.anim += dt;
+      if (b.state === "pop"){ if (b.t > 22) ghostBolts.splice(i, 1); continue; }
+      b.x += b.vx * dt; b.y += b.vy * dt;
+      var box = rect(b.x - 11, b.y - 11, 22, 22);
+      if (hitbox && intersects(hitbox, box)){
+        b.state = "pop"; b.t = 0; SFX.play("swat"); hitSparks(b.x, b.y, player.facing, 8);
+        continue;
+      }
+      if (intersects(player, box)){
+        hurtPlayer(b.x, "A wailing ghost's curse struck you.");
+        b.state = "pop"; b.t = 0;
+        continue;
+      }
+      if (b.t > 220 || b.x < camX - 100 || b.x > camX + VW + 100) { b.state = "pop"; b.t = 0; }
+    }
+  }
+  function drawGhostBolts(){
+    for (var i = 0; i < ghostBolts.length; i++){
+      var b = ghostBolts[i], sx = b.x - camX, alpha = b.state === "pop" ? Math.max(0, 1 - b.t / 22) : 1;
+      var gg = ctx.createRadialGradient(sx, b.y, 2, sx, b.y, 26);
+      gg.addColorStop(0, "rgba(210,170,255," + (0.4 * alpha).toFixed(2) + ")");
+      gg.addColorStop(1, "rgba(160,90,255,0)");
+      ctx.fillStyle = gg;
+      ctx.fillRect(sx - 26, b.y - 26, 52, 52);
+      var img = SOUL_SPRITES[b.state === "pop" ? (b.t < 8 ? "pop" : "smoke") : "f" + (Math.floor(b.anim * 0.2) % 4)];
+      if (!img || !img.ready) continue;
+      var S = 0.22, rot = b.state === "pop" ? 0 : Math.atan2(b.vy, b.vx);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(sx, b.y);
+      if (rot){
+        if (Math.abs(rot) > Math.PI / 2){ ctx.scale(-1, 1); rot = Math.PI - rot; }
+        ctx.rotate(rot);
+      }
+      ctx.drawImage(img, -img.a[0] * S, -img.a[1] * S, img.naturalWidth * S, img.naturalHeight * S);
+      ctx.restore();
+    }
   }
 
   // Flying imp. x/y/w/h is its hit box like a walking imp; cx/cy is its centre.
@@ -2153,12 +2305,15 @@
       var frost = isFrostStage(si);
       return {
         enemies: s.enemies.map(function(e){ return makeEnemy(e[0],e[1],e[2],e[3],e[4], frost); })
-                   .concat((s.flyers || []).map(function(route, i){ var f = makeFlyer(route, i); f.frost = frost; return f; })),
+                   .concat((s.flyers || []).map(function(route, i){ var f = makeFlyer(route, i); f.frost = frost; return f; }))
+                   .concat((s.shades || []).map(makeShade))
+                   .concat((s.ghosts || []).map(makeGhost)),
         boss: s.boss === "wyrm" ? makeWyrm(s) : s.boss === "wraith" ? makeWraith(s) : s.boss ? makeBoss(s.width) : null
       };
     });
     icicles = [];
     souls = [];
+    ghostBolts = [];
     arrivalT = -1;
     portalShut = false;
     boss = null;
@@ -2195,6 +2350,7 @@
     shockwaves = [];
     icicles = [];
     souls = [];
+    ghostBolts = [];
     explosionParticles = [];
     explosionFlash = null;
 
@@ -2891,6 +3047,10 @@
       }
       if (en.flyer){
         updateFlyer(en, dt);
+      } else if (en.ghost){
+        updateGhost(en, dt);
+      } else if (en.shade){
+        updateShade(en, dt);
       } else if (en.golem){
         updateGolem(en, dt);
         if (en.y > VH + 40){ en.alive = false; en.dead_t = 99; continue; }
@@ -2906,7 +3066,7 @@
 
       if (en.hitFlash > 0) en.hitFlash -= dt;
 
-      if (en.golem && en.hp > 1 && hitbox && intersects(hitbox, en)){
+      if (en.hp > 1 && hitbox && intersects(hitbox, en)){
         // first hit only cracks a golem: it staggers back
         if (en.hurtT <= 0){
           en.hp -= 1; en.hurtT = 26; en.hitFlash = 10; en.atkT = 0;
@@ -2916,7 +3076,7 @@
           hitSparks(en.x + en.w/2, en.y + en.h*0.4, player.facing, 10);
           impact(3, 20);
         }
-      } else if (hitbox && intersects(hitbox, en) && !(en.golem && en.hurtT > 0)){
+      } else if (hitbox && intersects(hitbox, en) && !(en.hp !== undefined && en.hurtT > 0)){
         en.alive = false;
         en.hitFlash = 10;
         score += 1;
@@ -2945,12 +3105,13 @@
         if (player.hp <= 0){
           player.hp = 0;
           gameState = "gameover"; SFX.play("gameover");
-          showOverlay("YOU DIED", (en.golem ? "The frost golems crushed you." : "The imps got the better of you.") + " Score: " + score + " · Time: " + Math.floor(timeAlive/60) + "s", "Try Again");
+          showOverlay("YOU DIED", (en.golem ? "The frost golems crushed you." : en.shade ? "The scythe wraiths reaped you." : en.ghost ? "The wailing ghosts dragged you under." : "The imps got the better of you.") + " Score: " + score + " · Time: " + Math.floor(timeAlive/60) + "s", "Try Again");
         }
       }
     }
 
     if (boss && gameState === "playing") updateBoss(dt, hitbox);
+    if (ghostBolts.length) updateGhostBolts(dt, hitbox);
     updateHeart(dt);
     updateIceHeart(dt);
     updateFlask(dt);
@@ -3331,6 +3492,7 @@
   function drawBossAttacks(){
     drawIcicles();
     drawSouls();
+    drawGhostBolts();
     for (var i = 0; i < fireballs.length; i++){
       var f = fireballs[i], fx = f.x - camX;
       // tail
@@ -4414,7 +4576,79 @@
     ctx.restore();
   }
 
+  function drawShade(en){
+    var life = 36;
+    if (!en.alive && en.dead_t > life) return;
+    var cx = en.x + en.w/2, sx = cx - camX;
+    if (sx < -130 || sx > VW + 130 || en.y - camY < -140 || en.y - camY > VH + 80) return;
+    var key;
+    if (!en.alive) key = "burst";
+    else if (en.hurtT > 0) key = "hurt";
+    else if (en.state === "raise") key = "raise";
+    else if (en.state === "slash") key = "slash";
+    else if (en.state === "rest") key = en.t < 14 ? "strike" : "float" + (1 + Math.floor(en.anim * 0.08) % 3);
+    else key = "float" + (1 + Math.floor(en.anim * 0.08) % 3);
+    var img = SHADE_SPRITES[key], S = SHADE_SCALE * (en.alive ? 1 : 1 + en.dead_t / life * 0.3);
+    ctx.save();
+    if (!en.alive) ctx.globalAlpha = Math.max(0, 1 - en.dead_t / life);
+    // the scythe glows while it's raised
+    if (en.alive && en.state === "raise"){
+      var rg = ctx.createRadialGradient(sx, en.y, 4, sx, en.y, 70);
+      rg.addColorStop(0, "rgba(210,130,255," + (0.3 + 0.2 * Math.sin(en.t * 0.6)).toFixed(2) + ")");
+      rg.addColorStop(1, "rgba(150,80,255,0)");
+      ctx.fillStyle = rg; ctx.fillRect(sx - 70, en.y - 70, 140, 140);
+    }
+    var jit = en.state === "raise" ? (Math.random() - 0.5) * 2 : 0;
+    // the hood sits a little in front of the body's centre
+    ctx.translate(sx + jit + en.facing * 8, en.y + 4);
+    if (en.facing < 0) ctx.scale(-1, 1);
+    ctx.shadowColor = "rgba(200,140,255,0.8)";
+    ctx.shadowBlur = 8;
+    if (en.hitFlash > 0) ctx.filter = "brightness(2.4) saturate(0.5)";
+    if (img.ready) ctx.drawImage(img, -img.a[0] * S, -img.a[1] * S, img.naturalWidth * S, img.naturalHeight * S);
+    else { ctx.fillStyle = "#2a1d3a"; ctx.fillRect(-en.w/2, 0, en.w, en.h); }
+    ctx.restore();
+  }
+  function drawGhost(g){
+    var life = 36;
+    if (!g.alive && g.dead_t > life) return;
+    var sx = g.cx - camX, sy = g.cy;
+    if (sx < -130 || sx > VW + 130 || sy - camY < -110 || sy - camY > VH + 110) return;
+    var key = !g.alive ? "burst" : g.hurtT > 0 ? "hurt" : g.state === "scream" ? "scream" : g.state === "spit" ? "spit"
+      : "float" + (Math.floor(g.anim * 0.1) % 4);
+    var img = GHOST_SPRITES[key], S = GHOST_SCALE * (g.alive ? 1 : 1 + g.dead_t / life * 0.4);
+    ctx.save();
+    if (!g.alive) ctx.globalAlpha = Math.max(0, 1 - g.dead_t / life);
+    if (g.alive && g.state === "scream"){
+      var cg = ctx.createRadialGradient(sx, sy, 4, sx, sy, 70);
+      cg.addColorStop(0, "rgba(200,130,255," + (0.3 + 0.2 * Math.sin(g.t * 0.6)).toFixed(2) + ")");
+      cg.addColorStop(1, "rgba(150,80,255,0)");
+      ctx.fillStyle = cg; ctx.fillRect(sx - 70, sy - 70, 140, 140);
+    }
+    // a soft violet haze so it reads against the dark art
+    if (g.alive){
+      var hz = ctx.createRadialGradient(sx, sy, 6, sx, sy, 62);
+      hz.addColorStop(0, "rgba(170,110,255,0.28)");
+      hz.addColorStop(1, "rgba(130,70,230,0)");
+      ctx.fillStyle = hz; ctx.fillRect(sx - 62, sy - 62, 124, 124);
+    }
+    var bob = g.alive ? Math.sin(g.anim * 0.05) * 3 : 0;
+    var jit = g.alive && g.state === "scream" ? (Math.random() - 0.5) * 2 : 0;
+    ctx.translate(sx + jit, sy + bob);
+    if (g.facing < 0) ctx.scale(-1, 1);
+    if (g.hitFlash > 0) ctx.filter = "brightness(2.2) saturate(0.6)";
+    if (img.ready){
+      var w = img.naturalWidth * S, h = img.naturalHeight * S;
+      ctx.drawImage(img, -w * 0.62, -h * 0.5, w, h);     // its heads sit right of centre
+    } else {
+      ctx.fillStyle = "#6a4a9a"; ctx.beginPath(); ctx.arc(0, 0, 20, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
   function drawEnemy(en){
+    if (en.ghost){ drawGhost(en); return; }
+    if (en.shade){ drawShade(en); return; }
     if (en.flyer){ drawFlyer(en); return; }
     if (en.golem){ drawGolem(en); return; }
     if (en.dead_t > 18) return;
