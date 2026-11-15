@@ -1110,6 +1110,11 @@
     return 0;
   }
 
+  // The two hit frames are wider than the rest (the reaching hand is no
+  // longer cut off), so they shift right by this many source px to keep the
+  // body and head where the other frames put them.
+  var PLAYER_SHIFT_X = { attack0: 18, attack4: 24.5 };
+
   // Player character sprites (shadow-creature artwork). The art faces LEFT natively;
   // we mirror it when the player faces right. Draw size = naturalWidth/2, naturalHeight/2
   // (bitmaps are saved at 2x for crispness).
@@ -1122,8 +1127,8 @@
       walk6:   "assets/player_walk6.png?v=2",
       idle:    "assets/player_idle.png?v=2",   // standing pose from main_sprite.png
       jump:    "assets/player_jump.png?v=2",
-      attack0: "assets/player_attack0.png?v=2",
-      attack4: "assets/player_attack4.png?v=2",
+      attack0: "assets/player_attack0.png?v=3",
+      attack4: "assets/player_attack4.png?v=3",
       hurt:    "assets/player_hurt.png",
       death:   "assets/player_death.png"
     };
@@ -1132,6 +1137,7 @@
       im.ready = false;
       im.onload = function(){ im.padB = feetPad(im); im.ready = true; };
       im.src = sources[key];
+      im.shiftX = PLAYER_SHIFT_X[key] || 0;
       PLAYER_SPRITES[key] = im;
     });
   })();
@@ -4786,7 +4792,7 @@
       // stand the feet on one line for every frame: the walk frames looked
       // right with their feet ~7px above the hitbox bottom, so all frames use that
       var lift = (img.padB || 0) / 2 - PLAYER_FOOT_LIFT;
-      ctx.drawImage(img, -dW/2, -dH + lift, dW, dH);
+      ctx.drawImage(img, -dW/2 + (img.shiftX || 0) / 2, -dH + lift, dW, dH);
     } else {
       // fallback silhouette while sprites decode
       ctx.fillStyle = "#1b1f2a";
