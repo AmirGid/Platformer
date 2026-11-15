@@ -774,7 +774,9 @@
   // a quick spray of sparks where a hit lands (ice shards in frost stages)
   function hitSparks(x, y, dir, count){
     var frost = isFrostStage(stageIndex);
-    var cols = frost ? ["235,250,255", "160,220,255", "110,180,240"] : ["255,250,220", "255,200,80", "255,120,40"];
+    var cols = frost ? ["235,250,255", "160,220,255", "110,180,240"]
+      : STAGES[stageIndex].realm ? ["245,230,255", "200,140,255", "140,70,230"]
+      : ["255,250,220", "255,200,80", "255,120,40"];
     for (var i = 0; i < count; i++){
       var ang = (dir ? (dir > 0 ? 0 : Math.PI) : Math.random() * Math.PI * 2) + (Math.random() - 0.5) * 1.9;
       var sp = 2 + Math.random() * 4.5, life = 12 + Math.random() * 14;
@@ -824,9 +826,14 @@
   // outside the Obsidian Gate. heightK = drawn height as a multiple of the
   // screen (extra room to scroll up through in tall stages); dim = how much
   // to darken it so sprites read on top.
-  [["den", "assets/den_background.jpg", 1.4, 0.32], ["tundra", "assets/tundra_background.jpg", 1.18, 0.4]].forEach(function(d){
+  // The shadow realm (stages H, J, K) uses the same scrolling, with a violet
+  // dim instead of the cold blue one.
+  [["den", "assets/den_background.jpg", 1.4, 0.32], ["tundra", "assets/tundra_background.jpg", 1.18, 0.4],
+   ["graves", "assets/graves_background.jpg", 1.45, 0.3, "10,6,22"],
+   ["cliffs", "assets/cliffs_background.jpg", 1.35, 0.28, "10,6,22"],
+   ["cathedral", "assets/cathedral_background.jpg", 1.12, 0.3, "10,6,22"]].forEach(function(d){
     var im = new Image();
-    var entry = { img: im, ready: false, w: 0, h: 0, dim: d[3], frost: true };
+    var entry = { img: im, ready: false, w: 0, h: 0, dim: d[3], frost: !d[4], dimRGB: d[4] };
     im.onload = function(){
       var scale = (VH * d[2]) / im.height;
       entry.w = im.width * scale; entry.h = im.height * scale; entry.ready = true;
@@ -968,6 +975,59 @@
       im.a = anchors[key];
       WYRM_SPRITES[key] = im;
     });
+  })();
+
+  // ---------- Shadow realm art (stages H, J, K) ----------
+  function loadArt(src, extra){
+    var im = new Image();
+    im.ready = false;
+    im.onload = function(){ im.ready = true; };
+    im.src = src;
+    if (extra) Object.keys(extra).forEach(function(k){ im[k] = extra[k]; });
+    return im;
+  }
+  // Ledge and ground pieces. top = where the walkable surface sits, as a
+  // fraction of the picture's height; mid = the stretch (fractions of its
+  // width) that repeats along wide ground.
+  var PLAT_ART = {
+    isle_flat:   loadArt("assets/plat_isle_flat.png",   { top: 0.24, mid: [0.3, 0.7] }),
+    isle_stairs: loadArt("assets/plat_isle_stairs.png", { top: 0.46 }),
+    cliff_block: loadArt("assets/plat_cliff_block.png", { top: 0.09, mid: [0.2, 0.8] }),
+    cliff_hang:  loadArt("assets/plat_cliff_hang.png",  { top: 0.08 }),
+    slab_banner: loadArt("assets/plat_slab_banner.png", { top: 0.17 }),
+    slab_chain:  loadArt("assets/plat_slab_chain.png",  { top: 0.36 }),
+    slab_plain:  loadArt("assets/plat_slab_plain.png",  { top: 0.26, mid: [0.3, 0.7] })
+  };
+  // which pieces each realm stage builds with: ledges cycle through the list
+  var REALM_SETS = {
+    graves:    { ledges: ["isle_flat", "isle_stairs"], ground: "cliff_block", wide: 1.25 },
+    cliffs:    { ledges: ["cliff_block", "cliff_hang"], ground: "cliff_block", wide: 1.12 },
+    cathedral: { ledges: ["slab_plain", "slab_banner", "slab_chain"], ground: "slab_plain", wide: 1.1 }
+  };
+  // imps and wisps from the burning world look ghostly violet in the realm
+  var REALM_FILTER = "hue-rotate(255deg) saturate(0.85) brightness(1.05)";
+
+  // Wraith Knight (Ruined Cathedral). Faces RIGHT natively. a = the glowing
+  // eye slit, which sits at the knight's x/y, in source px.
+  var WRAITH_SCALE = 0.95;
+  var WRAITH_SPRITES = {};
+  (function(){
+    var anchors = {
+      float0: [194, 37], float1: [207, 38], glide: [150, 35], hurt: [185, 45],
+      raise: [163, 70], slash: [160, 92], die0: [184, 36], die1: [160, 49], remains: [91, 154]
+    };
+    Object.keys(anchors).forEach(function(k){ WRAITH_SPRITES[k] = loadArt("assets/wraith_" + k + ".png", { a: anchors[k] }); });
+  })();
+  // Its lost souls: h = hovering as they gather, f = flying (face right).
+  var SOUL_SCALE = 0.34;
+  var SOUL_SPRITES = {};
+  (function(){
+    var anchors = {
+      h0: [61, 89], h1: [68, 87], h2: [62, 85], h3: [67, 96],
+      f0: [178, 58], f1: [173, 52], f2: [166, 55], f3: [180, 56],
+      pop: [112, 90], smoke: [66, 100]
+    };
+    Object.keys(anchors).forEach(function(k){ SOUL_SPRITES[k] = loadArt("assets/soul_" + k + ".png", { a: anchors[k] }); });
   })();
 
   // Flying imp sprites (native art faces RIGHT). anchor = the glowing eyes,
@@ -1143,7 +1203,11 @@
   //            (default: x = entryTopX or 120, just above the screen).
   //   exitTop: { y, to } jumping up past this height goes up to stage "to",
   //            popping up out of its drop pit at that stage's entryBelowX.
-  //   finish:  x where the Obsidian Gate stands; reaching it wins the game.
+  //   finish:  x where a portal stands. With portalTo it carries you to that
+  //            stage; without it, reaching it wins the game.
+  //   realm:   shadow realm stage: which art set (see REALM_SETS) to build
+  //            with. Its pits are a bottomless void.
+  //   arrival: x of the portal you step out of when you arrive here.
   //
   // Map (stage index in brackets):
   //   [0] Moonlit Ridge = [1] Ember Hollow = [4] Ashen Woods = [5] Cinder Cliffs
@@ -1151,6 +1215,10 @@
   //   [8] Smoldering Den = [2] Molten Core / [3] Frozen Spire   [6] The Chute
   //                            (E: not built yet)                    | pit
   //                                                             [7] Obsidian Gate
+  //   The Obsidian Gate's portal leads to the shadow realm, off on its own:
+  //   [10] Shadow Cliffs = [11] Ruined Cathedral (the Wraith Knight)
+  //     | climb up
+  //   [9] Haunted Graves (you arrive here)
   // Jump limits for laying out platforms: about 140px up, 170px across.
   var STAGES = [
     {
@@ -1356,6 +1424,7 @@
       oneWay: true,
       entryTopX: 160,
       finish: 2500,
+      portalTo: 9,                  // the portal opens into the shadow realm
       boss: "wyrm",
       arenaX: 1420,                 // walking past this wakes the wyrm
       width: 2600,
@@ -1404,6 +1473,105 @@
         [[1350, 220], [1000, 120]],
         [[700, -110], [360, -200]]
       ]
+    },
+    {
+      // H: through the Obsidian Gate's portal into the shadow realm. A
+      // graveyard of floating islands; the islands at the far end climb to a
+      // beam of light: jump up out of the top into the Shadow Cliffs.
+      name: "Haunted Graves",
+      label: "H",
+      exits: {},
+      backdrop: "graves",
+      realm: "graves",
+      oneWay: true,
+      arrival: 40,
+      width: 2600,
+      topY: -520,
+      summit: [2160, -330, 170],
+      exitTop: { y: -430, to: 10 },
+      entryTop: { x: 2230, y: -560 },   // dropping back down from the cliffs
+      ground: [[0, 820], [960, 1700], [1840, 2600]],
+      platforms: [
+        [230, 380, 150], [450, 300, 140], [680, 380, 130],
+        [850, 350, 90],                                       // over the 1st pit
+        [1060, 370, 150], [1290, 290, 150], [1520, 370, 140],
+        [1735, 350, 90],                                      // over the 2nd pit
+        // the climb
+        [1960, 380, 150], [2200, 300, 140], [2420, 215, 150], [2190, 130, 150],
+        [2420, 45, 150], [2180, -45, 150], [2420, -135, 150], [2200, -230, 140],
+        [2160, -330, 170]
+      ],
+      enemies: [
+        [400, 60, 800, 1.2, 444],
+        [500, 455, 575, 0.8, 274],     // [450,300]
+        [1200, 970, 1690, 1.5, 444],
+        [1340, 1295, 1425, 0.9, 264],  // [1290,290]
+        [2150, 1850, 2590, 1.3, 444],
+        [2230, 2195, 2325, 0.7, 104],  // [2190,130]
+        [2460, 2425, 2555, 0.8, -161]  // [2420,-135]
+      ],
+      flyers: [
+        [[600, 200], [900, 240]],
+        [[1400, 200], [1650, 250]],
+        [[2300, -60], [2060, 40]]
+      ]
+    },
+    {
+      // J: you pop up out of the shaft on the left. Cliffs over the void lead
+      // right to the cathedral; dropping back down the shaft returns to H.
+      name: "Shadow Cliffs",
+      label: "J",
+      exits: { right: 11 },
+      backdrop: "cliffs",
+      realm: "cliffs",
+      oneWay: true,
+      width: 2600,
+      topY: -300,
+      dropPit: { pit: 0, to: 9 },
+      entryBelowX: 280,
+      ground: [[0, 90], [250, 700], [860, 1300], [1480, 1950], [2140, 2600]],
+      platforms: [
+        [380, 370, 150], [560, 280, 140],
+        [745, 360, 100],                                      // over the 2nd pit
+        [980, 380, 150], [1150, 290, 140],
+        [1340, 360, 110],                                     // over the 3rd pit
+        [1080, 180, 140], [1330, 100, 150], [1590, 170, 140], // high road
+        [1620, 370, 150], [1800, 290, 140],
+        [1995, 350, 110],                                     // over the 4th pit
+        [2250, 370, 150], [2450, 290, 120]
+      ],
+      enemies: [
+        [500, 260, 690, 1.4, 444],
+        [1100, 870, 1290, 1.6, 444],
+        [1190, 1155, 1270, 0.9, 264],  // [1150,290]
+        [1400, 1340, 1470, 0.8, 74],   // [1330,100]
+        [1700, 1490, 1940, 1.5, 444],
+        [2350, 2150, 2590, 1.4, 444]
+      ],
+      flyers: [
+        [[650, 220], [950, 170]],
+        [[1450, 240], [1800, 190]],
+        [[2100, 230], [2400, 170]]
+      ]
+    },
+    {
+      // K: the Wraith Knight haunts the nave. The portal behind it stays
+      // sealed in shadow until it is destroyed; stepping through wins.
+      name: "Ruined Cathedral",
+      label: "K",
+      exits: { left: 10 },
+      backdrop: "cathedral",
+      realm: "cathedral",
+      oneWay: true,
+      width: 1800,
+      finish: 1660,
+      boss: "wraith",
+      arenaX: 380,                  // walking past this wakes the knight
+      ground: [[0, 1800]],
+      platforms: [
+        [430, 350, 150], [770, 270, 170], [1110, 350, 150]
+      ],
+      enemies: []
     }
   ];
 
@@ -1412,9 +1580,10 @@
   var WORLD_W, allPlatforms;
 
   function buildPlatforms(stage){
-    var list = stage.ground.map(function(g){ return rect(g[0], GROUND_Y, g[1] - g[0], 70); });
-    stage.platforms.forEach(function(p){
+    var list = stage.ground.map(function(g){ var r = rect(g[0], GROUND_Y, g[1] - g[0], 70); r.ground = true; return r; });
+    stage.platforms.forEach(function(p, i){
       var r = rect(p[0], p[1], p[2], 22);
+      r.art = i;
       if (stage.oneWay) r.oneWay = true;
       list.push(r);
     });
@@ -1840,7 +2009,11 @@
 
   var player, enemies, camX, camY = 0, score, gameState, shake, timeAlive;
   var explosionParticles, explosionFlash;
-  var boss = null, fireballs = [], shockwaves = [], icicles = [];
+  var boss = null, fireballs = [], shockwaves = [], icicles = [], souls = [];
+  // The portal into the shadow realm slams shut behind you: arrivalT counts
+  // frames since you stepped out (-1 = not running); portalShut = it is gone.
+  var arrivalT = -1, portalShut = false;
+  var PORTAL_HOLD = 40, PORTAL_SHRINK = 32, PORTAL_DONE = 110;
   var freezeT = 0;   // 0..1 progress of the fire-to-frost change after the golem dies
   var arenaFrozen = false;   // once true, the golem's room is the Frozen Spire for good
   var heart = null;  // the golem's heart once it has dropped
@@ -1864,10 +2037,13 @@
       return {
         enemies: s.enemies.map(function(e){ return makeEnemy(e[0],e[1],e[2],e[3],e[4], frost); })
                    .concat((s.flyers || []).map(function(route, i){ var f = makeFlyer(route, i); f.frost = frost; return f; })),
-        boss: s.boss === "wyrm" ? makeWyrm(s) : s.boss ? makeBoss(s.width) : null
+        boss: s.boss === "wyrm" ? makeWyrm(s) : s.boss === "wraith" ? makeWraith(s) : s.boss ? makeBoss(s.width) : null
       };
     });
     icicles = [];
+    souls = [];
+    arrivalT = -1;
+    portalShut = false;
     boss = null;
     fireballs = [];
     shockwaves = [];
@@ -1900,6 +2076,7 @@
     fireballs = [];
     shockwaves = [];
     icicles = [];
+    souls = [];
     explosionParticles = [];
     explosionFlash = null;
 
@@ -1911,6 +2088,13 @@
       player.x = et ? et.x : (stage.entryTopX || 120);
       player.y = et ? et.y : -player.h - 20;
       player.facing = 1;
+    } else if (from === "portal"){
+      // stepped out of a portal
+      player.x = (stage.arrival || 40) + 15;
+      player.facing = 1;
+      if (!portalShut) arrivalT = 0;
+      shake = Math.max(shake, 8);
+      explosionFlash = { x: player.x + player.w/2, y: GROUND_Y - 80, t: 0, maxT: 26 };
     } else if (from === "below"){
       // climbed up out of the stage below: hop up out of the drop pit
       player.x = stage.entryBelowX || 40;
@@ -2142,18 +2326,25 @@
     "boss": { x: 130, y: 64,  w: 112, h: 96, name: "Molten Core",   color: "#7a3410" },
     "8":    { x: 0,   y: 104, w: 112, h: 56, name: "Frozen Den",    color: "#2f6080" },
     "6":    { x: 429, y: 64,  w: 34,  h: 32, name: "",              color: "#3a1a44" },
-    "7":    { x: 390, y: 104, w: 112, h: 56, name: "Obsidian Gate", color: "#2f5a7a" }
+    "7":    { x: 390, y: 104, w: 112, h: 56, name: "Obsidian Gate", color: "#2f5a7a" },
+    // the shadow realm, reached only through the Obsidian Gate's portal
+    "9":    { x: 0,   y: -84,  w: 112, h: 56, name: "Haunted Graves", color: "#3b2d55" },
+    "10":   { x: 0,   y: -168, w: 112, h: 56, name: "Shadow Cliffs",  color: "#2c2342" },
+    "11":   { x: 130, y: -168, w: 112, h: 56, name: "Cathedral",      color: "#4b2a62" }
   };
   // doors between rooms: [roomA, roomB, x, y, vertical]
   var MAP_DOORS = [
     ["0", "1", 121, 28, false], ["1", "4", 251, 28, false], ["4", "5", 381, 28, false],
     ["1", "boss", 186, 60, true], ["8", "boss", 121, 132, false],
-    ["5", "6", 446, 60, true], ["6", "7", 446, 100, true]
+    ["5", "6", 446, 60, true], ["6", "7", 446, 100, true],
+    ["9", "10", 56, -98, true], ["10", "11", 121, -140, false]
   ];
 
   function drawWorldMap(){
     var visited = player.visited, here = mapKey(stageIndex);
-    var pw = 600, ph = 330, px = VW/2 - pw/2, py = VH/2 - ph/2;
+    // the shadow realm sits above the rest: grow the map once it's been found
+    var north = visited["9"] || visited["10"] || visited["11"];
+    var pw = 600, ph = north ? 434 : 330, px = VW/2 - pw/2, py = VH/2 - ph/2;
     ctx.save();
     ctx.fillStyle = "rgba(0,0,0,0.5)";
     ctx.fillRect(0, 0, VW, VH);
@@ -2172,7 +2363,7 @@
     ctx.font = "14px 'Press Start 2P', monospace";
     ctx.fillText("WORLD MAP", VW/2, py + 34);
 
-    var ox = px + (pw - 502) / 2, oy = py + 76, S = 1;
+    var ox = px + (pw - 502) / 2, oy = py + (north ? 62 + 168 : 76), S = 1;
     // doors first, under the rooms
     MAP_DOORS.forEach(function(d){
       if (!visited[d[0]] || !visited[d[1]]) return;
@@ -2461,6 +2652,7 @@
     if (gameState !== "playing") return;
     if (mapOpen) return;               // the world map pauses the game
     updateMapItem(dt);
+    updatePortalShut(dt);
     timeAlive += dt;
 
     var left = keys.ArrowLeft || keys.KeyA;
@@ -2529,7 +2721,8 @@
       if (player.hp <= 0){
         player.hp = 0;
         gameState = "gameover"; SFX.play("gameover");
-        showOverlay(isFrostStage(stageIndex) ? "YOU FROZE" : "YOU BURNED", (isFrostStage(stageIndex) ? "The ice chasm took you." : "The lava took you.") + " Score: " + score + " · Time: " + Math.floor(timeAlive/60) + "s", "Try Again");
+        var realmFall = !!STAGES[stageIndex].realm;
+        showOverlay(isFrostStage(stageIndex) ? "YOU FROZE" : realmFall ? "YOU FELL" : "YOU BURNED", (isFrostStage(stageIndex) ? "The ice chasm took you." : realmFall ? "The void swallowed you." : "The lava took you.") + " Score: " + score + " · Time: " + Math.floor(timeAlive/60) + "s", "Try Again");
         return;
       }
       player.x = player.entryX;
@@ -2658,13 +2851,20 @@
       return;
     }
 
-    // reaching the Obsidian Gate wins the game
-    var fin = STAGES[stageIndex].finish;
+    // stepping into an open portal: the Obsidian Gate's carries you into
+    // the shadow realm; the cathedral's wins the game
+    var stg = STAGES[stageIndex], fin = stg.finish;
     if (fin && !gateSealed() && player.x + player.w >= fin && gameState === "playing"){
+      if (stg.portalTo !== undefined){
+        SFX.play("ability");
+        buzz(60);
+        loadStage(stg.portalTo, "portal");
+        return;
+      }
       gameState = "win";
       var lifePct = Math.round((player.hp / player.maxHp) * 100);
       SFX.play("win");
-      showOverlay("YOU ESCAPED!", "You shattered the Magma Golem, slew the Frost Wyrm and passed through the Obsidian Gate with " + lifePct + "% of your flask still full. Time: " + Math.floor(timeAlive/60) + "s", "Play Again");
+      showOverlay("YOU ESCAPED!", "You shattered the Magma Golem, slew the Frost Wyrm, banished the Wraith Knight and escaped the shadow realm with " + lifePct + "% of your flask still full. Time: " + Math.floor(timeAlive/60) + "s", "Play Again");
     }
   }
 
@@ -2814,6 +3014,7 @@
 
   function updateBoss(dt, hitbox){
     if (boss.kind === "wyrm"){ updateWyrm(dt, hitbox); return; }
+    if (boss.kind === "wraith"){ updateWraith(dt, hitbox); return; }
     var b = boss;
     b.anim += dt;
     if (b.hitFlash > 0) b.hitFlash -= dt;
@@ -2953,6 +3154,7 @@
     var b = boss;
     if (!b) return;
     if (b.kind === "wyrm"){ drawWyrm(b); return; }
+    if (b.kind === "wraith"){ drawWraith(b); return; }
     var img = BOSS_SPRITES[bossPose(b)];
     var sx = b.x - camX;
     ctx.save();
@@ -3009,6 +3211,7 @@
 
   function drawBossAttacks(){
     drawIcicles();
+    drawSouls();
     for (var i = 0; i < fireballs.length; i++){
       var f = fireballs[i], fx = f.x - camX;
       // tail
@@ -3048,16 +3251,17 @@
     ctx.fillStyle = "rgba(10,6,8,0.6)";
     roundRect(x - 10, y - 24, w + 20, h + 34, 10);
     ctx.fill();
-    var icy = b.kind === "wyrm";
-    ctx.fillStyle = icy ? "#cdeeff" : "#ffcf9e";
+    var icy = b.kind === "wyrm", shade = b.kind === "wraith";
+    ctx.fillStyle = icy ? "#cdeeff" : shade ? "#e6d0ff" : "#ffcf9e";
     ctx.font = "10px 'Press Start 2P', monospace";
     ctx.textAlign = "center";
-    ctx.fillText(icy ? WYRM_NAME : BOSS_NAME, VW/2, y - 8);
-    ctx.fillStyle = icy ? "#0e1e2c" : "#2a1210";
+    ctx.fillText(icy ? WYRM_NAME : shade ? WRAITH_NAME : BOSS_NAME, VW/2, y - 8);
+    ctx.fillStyle = icy ? "#0e1e2c" : shade ? "#1a0e2a" : "#2a1210";
     roundRect(x, y, w, h, 4); ctx.fill();
     var pct = b.hp / b.maxHp;
     var g = ctx.createLinearGradient(x, 0, x + w, 0);
     if (icy){ g.addColorStop(0, "#3aa8ff"); g.addColorStop(1, "#c8f4ff"); }
+    else if (shade){ g.addColorStop(0, "#6a22e0"); g.addColorStop(1, "#e2a8ff"); }
     else { g.addColorStop(0, "#ff4a1c"); g.addColorStop(1, "#ffb347"); }
     ctx.fillStyle = g;
     if (pct > 0){ roundRect(x + 1, y + 1, Math.max(4, (w - 2) * pct), h - 2, 3); ctx.fill(); }
@@ -3349,6 +3553,297 @@
     ctx.restore();
   }
 
+  // ---------- Boss: the Wraith Knight (Ruined Cathedral) ----------
+  // Hovers at the far end of the nave until you walk in. Then it drifts
+  // after you and picks one of three attacks:
+  //   slash - raises its burning sword (the tell), then lunges and sweeps.
+  //           Only the sword hurts: jump over it or get out of reach.
+  //           It hangs still for a moment afterwards: hit it then.
+  //   souls - gathers lost souls around itself, then flings them at you.
+  //           Your attack swats them out of the air.
+  //   blink - fades out and reappears behind you, then slashes.
+  // Its ghostly body can be walked through; your sword hurts it any time.
+  var WRAITH_HP = 14;
+  var WRAITH_NAME = "WRAITH KNIGHT";
+  var WRAITH_Y = GROUND_Y - 152;     // eye height while hovering
+  var WRAITH_DIE_T = 90;             // the portal opens this long after it dies
+
+  function makeWraith(stage){
+    return {
+      kind: "wraith", x: stage.finish - 260, y: WRAITH_Y, vx: 0, facing: -1,
+      hp: WRAITH_HP, maxHp: WRAITH_HP, phase2: false, arenaX: stage.arenaX,
+      state: "waiting", t: 0, anim: 0, nextAttackIn: 80, alpha: 1,
+      hitFlash: 0, hurtT: 0, invuln: 0, dead_t: 0
+    };
+  }
+  function wraithBox(b){
+    return rect(b.x - b.facing * 22 - 38, b.y - 34, 76, 172);   // down to the hem of its cloak
+  }
+  function wraithSwordBox(b){
+    var reach = 170;
+    return rect(b.facing > 0 ? b.x - 30 : b.x + 30 - reach, b.y - 60, reach, 190);
+  }
+  function wraithState(b, s){
+    b.state = s; b.t = 0; b.fired = false;
+    if (s === "intro") SFX.play("roar");
+    if (s === "windup") SFX.play("swing", 0.5);
+    if (s === "lunge") SFX.play("swing");
+    if (s === "cast") SFX.play("screech", near(b.x, b.y));
+    if (s === "blinkOut" || s === "blinkIn") SFX.play("freeze", 0.5);
+  }
+  function wraithBurst(x, y, count, power){
+    explosionFlash = { x: x, y: y, t: 0, maxT: 30 };
+    for (var i = 0; i < count; i++){
+      var ang = Math.random() * Math.PI * 2, sp = 2 + Math.random() * power;
+      explosionParticles.push({
+        x: x, y: y, vx: Math.cos(ang)*sp, vy: Math.sin(ang)*sp - 2,
+        life: 40 + Math.random()*40, maxLife: 80, size: 2 + Math.random()*4,
+        color: ["235,210,255", "170,90,255", "40,20,60"][i % 3]
+      });
+    }
+  }
+  function damageWraith(b, invuln){
+    b.hp -= 1; b.invuln = invuln; b.hitFlash = 10;
+    SFX.play(b.hp <= 0 ? "bossDeath" : "bossHit");
+    shake = Math.max(shake, 6);
+    impact(b.hp <= 0 ? 14 : 4, b.hp <= 0 ? [90, 40, 260] : 45);
+    hitSparks(b.x - b.facing * 20, b.y + 40, player.facing, 12);
+    if (!b.phase2 && b.hp <= b.maxHp / 2) b.phase2 = true;
+    if (b.state === "float" || b.state === "recover") b.hurtT = 14;
+    if (b.hp <= 0){
+      b.hp = 0;
+      wraithState(b, "dead");
+      b.alpha = 1;
+      souls.forEach(function(sl){ if (sl.state !== "pop"){ sl.state = "pop"; sl.t = 0; } });
+      shake = 22;
+      wraithBurst(b.x, b.y + 40, 40, 5);
+    }
+  }
+  function spawnSouls(b){
+    var n = b.phase2 ? 4 : 3;
+    for (var i = 0; i < n; i++){
+      var ang = -Math.PI / 2 + (i - (n - 1) / 2) * 0.75;
+      souls.push({ ox: Math.cos(ang) * 95, oy: Math.sin(ang) * 80 + 10, x: b.x, y: b.y,
+        vx: 0, vy: 0, state: "gather", t: -i * 8, anim: Math.random() * 10 });
+    }
+  }
+
+  function updateWraith(dt, hitbox){
+    var b = boss;
+    b.anim += dt;
+    if (b.hitFlash > 0) b.hitFlash -= dt;
+    if (b.hurtT > 0) b.hurtT -= dt;
+    if (b.invuln > 0) b.invuln -= dt;
+    updateSouls(dt, hitbox);
+    if (b.state === "dead"){
+      var before = b.dead_t;
+      b.dead_t += dt;
+      if (b.y < GROUND_Y - 120) b.y += 0.6 * dt;     // sinks as it comes apart
+      if (before < 50 && b.dead_t >= 50){ shake = 26; wraithBurst(b.x, b.y + 50, 80, 8); SFX.play("explosion"); }
+      if (before < WRAITH_DIE_T && b.dead_t >= WRAITH_DIE_T){ SFX.play("ability"); shake = Math.max(shake, 8); }
+      return;
+    }
+    var mul = b.phase2 ? 1.3 : 1;
+    var pcx = player.x + player.w/2;
+    var lo = 120, hi = WORLD_W - 150;
+    function faceP(){ if (Math.abs(pcx - b.x) > 16) b.facing = pcx > b.x ? 1 : -1; }
+    function hover(k){ b.y += (WRAITH_Y + Math.sin(b.anim * 0.05) * 10 - b.y) * Math.min(1, k * dt); }
+    b.t += dt;
+    switch (b.state){
+      case "waiting":
+        b.y = WRAITH_Y + Math.sin(b.anim * 0.04) * 8;
+        if (player.x > b.arenaX){ wraithState(b, "intro"); shake = 10; }
+        break;
+      case "intro":
+        faceP(); hover(0.05);
+        if (b.t > 90){ wraithState(b, "float"); b.nextAttackIn = 60; }
+        break;
+      case "float":
+        faceP(); hover(0.05);
+        var want = pcx - b.facing * 230, dx = want - b.x;
+        b.x += Math.max(-2.4 * mul, Math.min(2.4 * mul, dx * 0.03)) * dt;
+        if (b.t > b.nextAttackIn){
+          var r = Math.random();
+          wraithState(b, r < 0.45 ? "windup" : r < 0.8 ? "cast" : "blinkOut");
+        }
+        break;
+      case "windup":      // the tell: sword raised, drifts back a little
+        faceP(); hover(0.05);
+        b.x -= b.facing * 0.5 * dt;
+        if (b.t > (b.phase2 ? 24 : 34)){ b.vx = b.facing * 11 * mul; wraithState(b, "lunge"); }
+        break;
+      case "lunge":
+        b.x += b.vx * dt;
+        b.vx *= Math.pow(0.9, dt);
+        b.y += (WRAITH_Y + 20 - b.y) * Math.min(1, 0.2 * dt);
+        if (b.t > 4 && b.t < 20 && intersects(player, wraithSwordBox(b)))
+          hurtPlayer(b.x, "The Wraith Knight cut you down.");
+        if (b.t > 24) wraithState(b, "recover");
+        break;
+      case "recover":
+        hover(0.03);
+        if (b.t > (b.phase2 ? 36 : 54)){ wraithState(b, "float"); b.nextAttackIn = (40 + Math.random() * 50) / mul; }
+        break;
+      case "cast":
+        faceP(); hover(0.05);
+        if (b.t >= 14 && !b.fired){ b.fired = true; spawnSouls(b); }
+        if (b.t > 80){ wraithState(b, "float"); b.nextAttackIn = (50 + Math.random() * 40) / mul; }
+        break;
+      case "blinkOut":
+        b.alpha = Math.max(0, 1 - b.t / 18);
+        if (b.t > 22){
+          var side = player.facing > 0 ? -1 : 1;           // behind you
+          b.x = Math.max(lo, Math.min(hi, pcx + side * 170));
+          if (Math.abs(b.x - pcx) < 120) b.x = Math.max(lo, Math.min(hi, pcx - side * 170));
+          faceP();
+          wraithState(b, "blinkIn");
+        }
+        break;
+      case "blinkIn":
+        b.alpha = Math.min(1, b.t / 14);
+        if (b.t > 16){ b.alpha = 1; wraithState(b, "windup"); b.t = b.phase2 ? 4 : 10; }
+        break;
+    }
+    b.x = Math.max(lo, Math.min(hi, b.x));
+
+    // getting hit
+    var box = wraithBox(b);
+    var hittable = b.state !== "waiting" && b.state !== "intro" && b.alpha > 0.5;
+    if (hittable && b.invuln <= 0){
+      if (hitbox && intersects(hitbox, box)) damageWraith(b, 22);
+      else if (player.superMode && intersects(player, box)) damageWraith(b, 40);
+    }
+  }
+
+  function updateSouls(dt, hitbox){
+    var b = boss;
+    for (var i = souls.length - 1; i >= 0; i--){
+      var sl = souls[i];
+      sl.t += dt; sl.anim += dt;
+      if (sl.state === "pop"){ if (sl.t > 26) souls.splice(i, 1); continue; }
+      if (sl.state === "gather"){
+        // circle the knight as they gather
+        sl.x = b.x + sl.ox; sl.y = b.y + sl.oy + Math.sin(sl.anim * 0.12) * 4;
+        if (sl.t > 40){
+          var px = player.x + player.w/2, py = player.y + player.h/2;
+          var dx = px - sl.x, dy = py - sl.y, d = Math.hypot(dx, dy) || 1, sp = b.phase2 ? 5 : 4.2;
+          sl.vx = dx / d * sp; sl.vy = dy / d * sp;
+          sl.state = "fly"; sl.t = 0;
+          SFX.play("fireball", 0.5);
+        }
+        continue;
+      }
+      // fly, turning a little toward you for a while
+      if (sl.t < 40){
+        var tx = player.x + player.w/2 - sl.x, ty = player.y + player.h/2 - sl.y;
+        var cur = Math.atan2(sl.vy, sl.vx), want = Math.atan2(ty, tx);
+        var diff = Math.atan2(Math.sin(want - cur), Math.cos(want - cur));
+        cur += Math.max(-0.025, Math.min(0.025, diff)) * dt;
+        var spd = Math.hypot(sl.vx, sl.vy);
+        sl.vx = Math.cos(cur) * spd; sl.vy = Math.sin(cur) * spd;
+      }
+      sl.x += sl.vx * dt; sl.y += sl.vy * dt;
+      var sb = rect(sl.x - 14, sl.y - 14, 28, 28);
+      if (hitbox && intersects(hitbox, sb)){
+        sl.state = "pop"; sl.t = 0; SFX.play("swat"); shake = Math.max(shake, 4);
+        hitSparks(sl.x, sl.y, player.facing, 8);
+        continue;
+      }
+      if (intersects(player, sb)){
+        hurtPlayer(sl.x, "A lost soul dragged you under.");
+        sl.state = "pop"; sl.t = 0;
+        continue;
+      }
+      if (sl.t > 240 || sl.y > GROUND_Y + 10 || sl.x < -60 || sl.x > WORLD_W + 60){
+        sl.state = "pop"; sl.t = 0;
+      }
+    }
+  }
+
+  function drawSouls(){
+    for (var i = 0; i < souls.length; i++){
+      var sl = souls[i], sx = sl.x - camX, key, rot = 0, alpha = 1, S = SOUL_SCALE;
+      if (sl.state === "gather"){
+        if (sl.t < 0) continue;
+        key = "h" + (Math.floor(sl.anim * 0.15) % 4);
+        alpha = Math.min(1, sl.t / 12);
+        S *= 0.6 + 0.4 * Math.min(1, sl.t / 20);
+      } else if (sl.state === "fly"){
+        key = "f" + (Math.floor(sl.anim * 0.2) % 4);
+        rot = Math.atan2(sl.vy, sl.vx);
+      } else {
+        key = sl.t < 10 ? "pop" : "smoke";
+        alpha = sl.t < 10 ? 1 : Math.max(0, 1 - (sl.t - 10) / 16);
+      }
+      var img = SOUL_SPRITES[key];
+      // glow so they read against the dark art
+      var gg = ctx.createRadialGradient(sx, sl.y, 2, sx, sl.y, 34);
+      gg.addColorStop(0, "rgba(210,170,255," + (0.35 * alpha).toFixed(2) + ")");
+      gg.addColorStop(1, "rgba(160,90,255,0)");
+      ctx.fillStyle = gg;
+      ctx.fillRect(sx - 34, sl.y - 34, 68, 68);
+      if (!img || !img.ready) continue;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(sx, sl.y);
+      if (rot){
+        // keep the face upright when flying left
+        if (Math.abs(rot) > Math.PI / 2){ ctx.scale(-1, 1); rot = Math.PI - rot; }
+        ctx.rotate(rot);
+      }
+      ctx.drawImage(img, -img.a[0] * S, -img.a[1] * S, img.naturalWidth * S, img.naturalHeight * S);
+      ctx.restore();
+    }
+  }
+
+  function wraithPose(b){
+    switch (b.state){
+      case "intro": return "raise";
+      case "windup": return "raise";
+      case "lunge": return "slash";
+      case "cast": return "glide";
+      case "blinkOut": case "blinkIn": return "glide";
+      case "dead": return b.dead_t < 50 ? "die0" : b.dead_t < 70 ? "die1" : "remains";
+    }
+    if (b.hurtT > 0) return "hurt";
+    return Math.floor(b.anim * 0.04) % 2 ? "float1" : "float0";
+  }
+
+  function drawWraith(b){
+    var key = wraithPose(b), img = WRAITH_SPRITES[key], S = WRAITH_SCALE;
+    var sx = b.x - camX;
+    if (sx < -300 || sx > VW + 300) return;
+    // shadow on the floor
+    if (key !== "remains"){
+      ctx.fillStyle = "rgba(20,0,40," + (0.35 * b.alpha).toFixed(2) + ")";
+      ctx.beginPath(); ctx.ellipse(sx - b.facing * 20, GROUND_Y + 2, 70, 9, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    // violet glow while it gathers souls or winds up
+    if (b.state === "cast" || b.state === "windup"){
+      var cg = ctx.createRadialGradient(sx, b.y + 30, 4, sx, b.y + 30, 130);
+      cg.addColorStop(0, "rgba(190,120,255," + (0.28 + 0.2 * Math.sin(b.t * 0.5)).toFixed(2) + ")");
+      cg.addColorStop(1, "rgba(150,80,255,0)");
+      ctx.fillStyle = cg; ctx.fillRect(sx - 140, b.y - 100, 280, 280);
+    }
+    if (!img || !img.ready) return;
+    ctx.save();
+    if (key === "remains"){
+      ctx.globalAlpha = Math.min(1, (b.dead_t - 70) / 12);
+      ctx.translate(sx, GROUND_Y + 8);
+      ctx.drawImage(img, -img.a[0] * S, -img.a[1] * S, img.naturalWidth * S, img.naturalHeight * S);
+      ctx.restore();
+      return;
+    }
+    var shudder = (b.state === "windup" || (b.state === "dead" && b.dead_t < 50)) ? (Math.random() - 0.5) * 3 : 0;
+    ctx.globalAlpha = b.alpha;
+    if (b.state === "dead" && b.dead_t >= 50) ctx.globalAlpha = Math.max(0, 1 - (b.dead_t - 50) / 20);
+    ctx.translate(sx + shudder, b.y);
+    if (b.facing < 0) ctx.scale(-1, 1);
+    if (b.hitFlash > 0) ctx.filter = "brightness(2.2) saturate(0.6)";
+    ctx.drawImage(img, -img.a[0] * S, -img.a[1] * S, img.naturalWidth * S, img.naturalHeight * S);
+    ctx.restore();
+  }
+
   function showOverlay(title, text, btnLabel){
     overlayTitle.textContent = title;
     overlayText.textContent = text;
@@ -3371,11 +3866,11 @@
       ctx.fillRect(0, 0, VW, VH);
     }
     // the ice art is bright: cool it down so the player and ledges read
-    ctx.fillStyle = "rgba(6,18,36," + (bd.dim || 0.48) + ")";
+    ctx.fillStyle = "rgba(" + (bd.dimRGB || "6,18,36") + "," + (bd.dim || 0.48) + ")";
     ctx.fillRect(0, 0, VW, VH);
     var vg = ctx.createLinearGradient(0, VH*0.55, 0, VH);
-    vg.addColorStop(0, "rgba(4,10,24,0)");
-    vg.addColorStop(1, "rgba(4,10,24,0.4)");
+    vg.addColorStop(0, "rgba(" + (bd.dimRGB || "4,10,24") + ",0)");
+    vg.addColorStop(1, "rgba(" + (bd.dimRGB || "4,10,24") + ",0.4)");
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, VW, VH);
   }
@@ -3404,7 +3899,7 @@
   function drawBackground(){
     var backdrop = STAGES[stageIndex].backdrop;
     if (backdrop === "frost"){ drawFrostBackdrop(); return; }
-    if (backdrop === "den" || backdrop === "tundra"){ drawFrostBackdrop(backdrop); return; }
+    if (backdrop === "den" || backdrop === "tundra" || STAGES[stageIndex].realm){ drawFrostBackdrop(backdrop); return; }
     if (backdrop && backdrop !== "forest"){
       var bd = BACKDROPS[backdrop];
       if (bd && bd.ready){
@@ -3494,7 +3989,45 @@
     }
   }
 
+  // Shadow realm: ledges are whole pieces of art (cycling through the stage's
+  // set), ground repeats the middle of one piece with its ends at the edges.
+  function drawRealmPlatform(p, set){
+    var sx = p.x - camX;
+    if (sx + p.w < -80 || sx > VW + 80 || p.y - camY > VH + 20 || p.y - camY < -260) return;
+    if (p.ground){ drawRealmGround(p, PLAT_ART[set.ground], sx); return; }
+    var a = PLAT_ART[set.ledges[p.art % set.ledges.length]];
+    if (!a.ready){ ctx.fillStyle = "#2a2236"; ctx.fillRect(sx, p.y, p.w, 16); return; }
+    var dw = p.w * set.wide, k = dw / a.naturalWidth, dh = a.naturalHeight * k;
+    ctx.drawImage(a, sx + p.w/2 - dw/2, p.y + 3 - a.top * dh, dw, dh);
+  }
+  function drawRealmGround(p, a, sx){
+    if (!a.ready){ ctx.fillStyle = "#1e1828"; ctx.fillRect(sx, p.y, p.w, p.h); return; }
+    var TH = 120, k = TH / a.naturalHeight, iw = a.naturalWidth;
+    var m0 = a.mid[0] * iw, m1 = a.mid[1] * iw, midW = (m1 - m0) * k;
+    var capL = m0 * k, capR = (iw - m1) * k;
+    var y = p.y + 3 - a.top * TH;
+    var x0 = sx + capL - 1, x1 = sx + p.w - capR + 1;
+    for (var i = 0, x = x0; x < x1; i++, x += midW){
+      if (x + midW < 0) continue;
+      if (x > VW) break;
+      var dw = Math.min(midW, x1 - x), cw = dw / k;
+      if (i % 2 === 0){
+        ctx.drawImage(a, m0, 0, cw, a.naturalHeight, x, y, dw, TH);
+      } else {
+        ctx.save();
+        ctx.translate(x + dw, y);
+        ctx.scale(-1, 1);
+        ctx.drawImage(a, m1 - cw, 0, cw, a.naturalHeight, 0, 0, dw, TH);
+        ctx.restore();
+      }
+    }
+    ctx.drawImage(a, 0, 0, m0 + 6, a.naturalHeight, sx, y, capL + 6 * k, TH);
+    ctx.drawImage(a, m1 - 6, 0, iw - m1 + 6, a.naturalHeight, sx + p.w - capR - 6 * k, y, capR + 6 * k, TH);
+  }
+
   function drawPlatform(p){
+    var realm = STAGES[stageIndex].realm;
+    if (realm){ drawRealmPlatform(p, REALM_SETS[realm]); return; }
     if (STAGES[stageIndex].ice){ drawIcePlatform(p); return; }
     var sx = p.x - camX;
     if (sx + p.w < 0 || sx > VW) return;
@@ -3553,6 +4086,7 @@
       if (sx + w < 0 || sx > VW) continue;
       if (drop && drop.pit === i){ drawShaft(sx, w); continue; }
       if (icy){ drawChasm(sx, w, i); continue; }
+      if (STAGES[stageIndex].realm){ drawVoid(sx, w, i); continue; }
       var g = ctx.createLinearGradient(0, GROUND_Y, 0, VH);
       g.addColorStop(0, "rgba(10,4,4,0.9)");
       g.addColorStop(0.55, "rgba(140,30,6," + (0.85*pulse).toFixed(2) + ")");
@@ -3598,6 +4132,28 @@
       var ey = GROUND_Y + 10 - t*9;
       ctx.fillStyle = "rgba(235,250,255," + (Math.max(0, 1 - t/10)*0.9).toFixed(2) + ")";
       ctx.beginPath(); ctx.arc(ex, ey, 1.6, 0, Math.PI*2); ctx.fill();
+    }
+  }
+
+  // Shadow realm: the gaps are a bottomless violet void, souls drifting up.
+  function drawVoid(sx, w, i){
+    var g = ctx.createLinearGradient(0, GROUND_Y, 0, VH);
+    g.addColorStop(0, "rgba(3,1,8,0.98)");
+    g.addColorStop(0.6, "rgba(18,6,32,0.97)");
+    g.addColorStop(1, "rgba(48,14,84,0.95)");
+    ctx.fillStyle = g;
+    ctx.fillRect(sx, GROUND_Y, w, VH - GROUND_Y);
+    var hg = ctx.createRadialGradient(sx + w/2, GROUND_Y + 30, 4, sx + w/2, GROUND_Y + 30, w * 0.9);
+    hg.addColorStop(0, "rgba(170,90,255,0.3)");
+    hg.addColorStop(1, "rgba(170,90,255,0)");
+    ctx.fillStyle = hg;
+    ctx.fillRect(sx - w*0.4, GROUND_Y - w*0.9, w*1.8, w*0.9 + 40);
+    for (var e = 0; e < 4; e++){
+      var t = (timeAlive*0.4 + e*2.6 + i*1.7) % 10;
+      var ex = sx + w*(0.2 + 0.2*e) + Math.sin(timeAlive*0.05 + e)*8;
+      var ey = GROUND_Y + 10 - t*9;
+      ctx.fillStyle = "rgba(210,160,255," + (Math.max(0, 1 - t/10)*0.85).toFixed(2) + ")";
+      ctx.beginPath(); ctx.arc(ex, ey, 1.8, 0, Math.PI*2); ctx.fill();
     }
   }
 
@@ -3669,7 +4225,7 @@
     var icy = STAGES[stageIndex].ice;
     ctx.fillStyle = icy ? "#9fe4ff" : "#ffb57a";
     ctx.font = "12px 'Press Start 2P', monospace";
-    ctx.fillText("STAGE " + (stageIndex + 1), VW/2, 92);
+    ctx.fillText("STAGE " + (STAGES[stageIndex].label || stageIndex + 1), VW/2, 92);
     ctx.fillStyle = icy ? "#eafaff" : "#ffe2c4";
     ctx.shadowColor = icy ? "rgba(80,190,255,0.9)" : "rgba(255,90,20,0.9)";
     ctx.shadowBlur = 16;
@@ -3690,6 +4246,7 @@
     var rate = set === "hover" ? 0.16 : set === "dive" ? 0.3 : 0.2;
     var img = (f.frost ? FROST_FLYER_SPRITES : FLYER_SPRITES)[set + (Math.floor(f.anim * rate) % 4)];
     ctx.save();
+    if (STAGES[stageIndex].realm) ctx.filter = REALM_FILTER;
     ctx.translate(sx, sy);
     if (!f.alive){
       ctx.globalAlpha = Math.max(0, 1 - f.dead_t / life);
@@ -3750,6 +4307,7 @@
     var fade = en.alive ? 1 : Math.max(0, 1 - en.dead_t/18);
 
     ctx.save();
+    if (STAGES[stageIndex].realm) ctx.filter = REALM_FILTER;
     ctx.globalAlpha = fade;
 
     if (img && img.ready){
@@ -4204,14 +4762,20 @@
 
   // The gate stays sealed in ice while the Frost Wyrm lives.
   function gateSealed(){
-    return !!(boss && boss.kind === "wyrm" && (boss.state !== "dead" || boss.dead_t < 70));
+    if (!boss) return false;
+    if (boss.kind === "wyrm") return boss.state !== "dead" || boss.dead_t < 70;
+    if (boss.kind === "wraith") return boss.state !== "dead" || boss.dead_t < WRAITH_DIE_T;
+    return false;
   }
 
   // The Obsidian Gate: a black stone arch with a swirling violet portal.
   function drawFinishGate(){
-    drawGatePortal();
+    var arr = STAGES[stageIndex].arrival;
+    if (arr !== undefined) drawGatePortal(arr, arrivalOpen());
+    drawGatePortal(STAGES[stageIndex].finish);
     var fin = STAGES[stageIndex].finish;
     if (fin === undefined || !gateSealed()) return;
+    if (boss && boss.kind === "wraith"){ drawShadowSeal(fin); return; }
     // ice slab over the portal
     var cx = fin + 30 - camX, base = GROUND_Y, w = 90, h = 170;
     ctx.save();
@@ -4235,20 +4799,98 @@
     });
     ctx.restore();
   }
-  function drawGatePortal(){
-    var fin = STAGES[stageIndex].finish;
+  // How open the arrival portal is right now: 1 = open, 0 = shut.
+  function arrivalOpen(){
+    if (portalShut) return 0;
+    if (arrivalT < 0) return 1;
+    var k = Math.max(0, Math.min(1, (arrivalT - PORTAL_HOLD) / PORTAL_SHRINK));
+    return 1 - k * k;                       // eases in: slow at first, then snaps
+  }
+  function updatePortalShut(dt){
+    if (arrivalT < 0) return;
+    var arr = STAGES[stageIndex].arrival;
+    if (arr === undefined){ arrivalT = -1; return; }
+    var before = arrivalT;
+    arrivalT += dt;
+    var cx = arr + 30, cy = GROUND_Y - 170 * 0.45;
+    if (before < PORTAL_HOLD && arrivalT >= PORTAL_HOLD) SFX.play("freeze", 0.8);
+    // it collapses to a point and bursts
+    if (before < PORTAL_HOLD + PORTAL_SHRINK && arrivalT >= PORTAL_HOLD + PORTAL_SHRINK){
+      SFX.play("slam");
+      shake = Math.max(shake, 14);
+      buzz([60, 40, 120]);
+      explosionFlash = { x: cx, y: cy, t: 0, maxT: 24 };
+      for (var i = 0; i < 36; i++){
+        var ang = Math.random() * Math.PI * 2, sp = 1.5 + Math.random() * 5, life = 24 + Math.random() * 24;
+        explosionParticles.push({ x: cx, y: cy, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 1,
+          life: life, maxLife: life, size: 1.5 + Math.random() * 3, color: ["245,225,255", "200,140,255", "120,50,220"][i % 3] });
+      }
+    }
+    // and the voice from the start of the game laughs at you
+    if (before < PORTAL_HOLD + PORTAL_SHRINK + 8 && arrivalT >= PORTAL_HOLD + PORTAL_SHRINK + 8) playStartLaugh();
+    if (arrivalT >= PORTAL_DONE){ arrivalT = -1; portalShut = true; }
+  }
+
+  // A wall of black smoke and violet runes over the cathedral's portal.
+  function drawShadowSeal(fin){
+    var cx = fin + 30 - camX, base = GROUND_Y, w = 90, h = 170, t = timeAlive;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(cx - w/2 + 6, base);
+    ctx.lineTo(cx - w/2 + 6, base - h + w/2);
+    ctx.arc(cx, base - h + w/2, w/2 - 6, Math.PI, 0);
+    ctx.lineTo(cx + w/2 - 6, base);
+    ctx.closePath();
+    var sg = ctx.createLinearGradient(0, base - h, 0, base);
+    sg.addColorStop(0, "rgba(40,16,60,0.96)");
+    sg.addColorStop(1, "rgba(8,4,14,0.98)");
+    ctx.fillStyle = sg;
+    ctx.fill();
+    ctx.clip();
+    for (var i = 0; i < 5; i++){
+      var y = base - ((t * 0.8 + i * 34) % h);
+      ctx.fillStyle = "rgba(190,120,255," + (0.25 + 0.2 * Math.sin(t * 0.1 + i)).toFixed(2) + ")";
+      ctx.font = "14px 'Press Start 2P', monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("ᛟᚱᛞᛉᚦ".charAt(i), cx + Math.sin(t * 0.03 + i * 2) * 20, y);
+    }
+    ctx.textAlign = "left";
+    ctx.restore();
+  }
+
+  function drawGatePortal(fin, open){
     if (fin === undefined) return;
+    if (open === undefined) open = 1;
     var cx = fin + 30 - camX, base = GROUND_Y, w = 90, h = 170;
     if (cx < -150 || cx > VW + 150) return;
     var t = timeAlive;
     ctx.save();
+    // a shut portal: just dead dark stone inside the arch
+    if (open < 1){
+      ctx.beginPath();
+      ctx.moveTo(cx - w/2 + 6, base);
+      ctx.lineTo(cx - w/2 + 6, base - h + w/2);
+      ctx.arc(cx, base - h + w/2, w/2 - 6, Math.PI, 0);
+      ctx.lineTo(cx + w/2 - 6, base);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(14,8,20," + (0.92 * (1 - open)).toFixed(2) + ")";
+      ctx.fill();
+    }
+    if (open <= 0){ drawArch(cx, base, w, h, 0.12); ctx.restore(); return; }
     // glow
     var g = ctx.createRadialGradient(cx, base - h * 0.5, 10, cx, base - h * 0.5, 170);
-    g.addColorStop(0, "rgba(190,120,255," + (0.35 + 0.1 * Math.sin(t * 0.07)).toFixed(2) + ")");
+    g.addColorStop(0, "rgba(190,120,255," + ((0.35 + 0.1 * Math.sin(t * 0.07)) * open).toFixed(2) + ")");
     g.addColorStop(1, "rgba(120,40,200,0)");
     ctx.fillStyle = g;
     ctx.fillRect(cx - 170, base - h - 90, 340, h + 110);
-    // portal
+    // portal (squeezes to a point as it shuts, flickering)
+    ctx.save();
+    if (open < 1){
+      var fl = open * (0.85 + 0.15 * Math.random());
+      ctx.translate(cx, base - h * 0.45);
+      ctx.scale(fl, fl);
+      ctx.translate(-cx, -(base - h * 0.45));
+    }
     ctx.beginPath();
     ctx.moveTo(cx - w/2 + 12, base);
     ctx.lineTo(cx - w/2 + 12, base - h + w/2);
@@ -4271,20 +4913,10 @@
       ctx.stroke();
     }
     ctx.restore();
-    // stone arch
-    ctx.strokeStyle = "#1b1222";
-    ctx.lineWidth = 16;
-    ctx.beginPath();
-    ctx.moveTo(cx - w/2 + 4, base);
-    ctx.lineTo(cx - w/2 + 4, base - h + w/2);
-    ctx.arc(cx, base - h + w/2, w/2 - 4, Math.PI, 0);
-    ctx.lineTo(cx + w/2 - 4, base);
-    ctx.stroke();
-    ctx.strokeStyle = "rgba(200,140,255,0.6)";
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    ctx.restore();
+    drawArch(cx, base, w, h, 0.6 * open);
     // motes drifting up out of it
-    for (var i = 0; i < 6; i++){
+    if (open > 0.6) for (var i = 0; i < 6; i++){
       var k = (t * 0.5 + i * 7) % 40;
       ctx.fillStyle = "rgba(230,190,255," + (1 - k / 40).toFixed(2) + ")";
       ctx.beginPath();
@@ -4293,6 +4925,20 @@
     }
     ctx.restore();
   }
+  // the black stone arch round a portal; rim = how bright its violet edge is
+  function drawArch(cx, base, w, h, rim){
+    ctx.strokeStyle = "#1b1222";
+    ctx.lineWidth = 16;
+    ctx.beginPath();
+    ctx.moveTo(cx - w/2 + 4, base);
+    ctx.lineTo(cx - w/2 + 4, base - h + w/2);
+    ctx.arc(cx, base - h + w/2, w/2 - 4, Math.PI, 0);
+    ctx.lineTo(cx + w/2 - 4, base);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(200,140,255," + rim.toFixed(2) + ")";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
 
   // A pillar of cold light marks the summit ledge.
   function drawSummit(){
@@ -4300,14 +4946,17 @@
     if (!sm) return;
     var cx = sm[0] + sm[2]/2 - camX, top = sm[1];
     var pulse = 0.75 + 0.25 * Math.sin(timeAlive * 0.06);
+    var realm = !!STAGES[stageIndex].realm;
+    var c0 = realm ? "200,150,255" : "160,230,255", c1 = realm ? "220,180,255" : "190,240,255";
+    var c2 = realm ? "240,220,255" : "230,250,255", c3 = realm ? "170,110,255" : "150,220,255";
     var g = ctx.createLinearGradient(0, top - 260, 0, top);
-    g.addColorStop(0, "rgba(160,230,255,0)");
-    g.addColorStop(1, "rgba(190,240,255," + (0.45 * pulse).toFixed(2) + ")");
+    g.addColorStop(0, "rgba(" + c0 + ",0)");
+    g.addColorStop(1, "rgba(" + c1 + "," + (0.45 * pulse).toFixed(2) + ")");
     ctx.fillStyle = g;
     ctx.fillRect(cx - 40, top - 260, 80, 260);
     var rg = ctx.createRadialGradient(cx, top - 30, 2, cx, top - 30, 70);
-    rg.addColorStop(0, "rgba(230,250,255," + (0.85 * pulse).toFixed(2) + ")");
-    rg.addColorStop(1, "rgba(150,220,255,0)");
+    rg.addColorStop(0, "rgba(" + c2 + "," + (0.85 * pulse).toFixed(2) + ")");
+    rg.addColorStop(1, "rgba(" + c3 + ",0)");
     ctx.fillStyle = rg;
     ctx.fillRect(cx - 70, top - 100, 140, 140);
   }

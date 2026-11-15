@@ -7,14 +7,18 @@ A browser-based HTML5 canvas platformer. Move through a moonlit forest overlooki
 Stages are linked metroidvania style: walk off an edge or drop down a shaft to reach the next area. Imps you've killed stay dead when you return.
 
 ```
+ Shadow Cliffs (J) = Ruined Cathedral (K, finish)
+       | climb up
+ Haunted Graves (H)   <- reached only through the Obsidian Gate's portal
+
  Moonlit Ridge = Ember Hollow = Ashen Woods = Cinder Cliffs
                       | shaft                     | shaft
  Frozen Den     = Molten Core /              The Chute
                   Frozen Spire                    | shaft
-                                             Obsidian Gate (finish)
+                                             Obsidian Gate -> portal to Haunted Graves
 ```
 
-The route: Ember Hollow, down into the golem's room, beat it, climb the Frozen Spire back up into Ember Hollow, then east through Ashen Woods (needs the double jump) and Cinder Cliffs, down The Chute to the Obsidian Gate.
+The route: Ember Hollow, down into the golem's room, beat it, climb the Frozen Spire back up into Ember Hollow, then east through Ashen Woods (needs the double jump) and Cinder Cliffs, down The Chute to the Obsidian Gate, whose portal throws you into the shadow realm: up through Haunted Graves and Shadow Cliffs to the Ruined Cathedral.
 
 1. **Moonlit Ridge** (start): solid ground and scattered rock ledges. Exit east to Ember Hollow.
 2. **Ember Hollow**: lava pits in the ground (falling in costs one flask hit and sends you back to the stage entrance), a high staircase route and more, faster imps. The last pit is a dark shaft instead of lava: drop into it to reach the Molten Core. Exit east to Ashen Woods.
@@ -23,8 +27,11 @@ The route: Ember Hollow, down into the golem's room, beat it, climb the Frozen S
 5. **Ashen Woods**: grey forest east of Ember Hollow. Its last lava gap is too wide for one jump: you need the golem's double jump to reach Cinder Cliffs.
 6. **Cinder Cliffs**: red-lit cliffs with winged imps; the last pit is a shaft down into The Chute.
 7. **The Chute**: a narrow, tall shaft. Work your way down the ledges past winged imps; the pit at the bottom drops into the Obsidian Gate. Double-jump up out of the top to go back to Cinder Cliffs.
-8. **Obsidian Gate** (finish): the last gauntlet of pits and fast imps. Reach the glowing gate at the far end to win.
+8. **Obsidian Gate**: frozen wastes with frost golems and wisps, then the **Frost Wyrm**. Its portal stays sealed in ice until the wyrm is dead; step through it to enter the shadow realm.
 9. **Frozen Den**: an icy side cave west of the golem's room. Climb its ice ledges to the top left to find the **world map**: once you have it, press **M** (or tap the map button) to open a map of the stages you've visited, with a marker showing where you are. The game pauses while it's open.
+10. **Haunted Graves** (H): you step out of the portal into a violet graveyard of floating islands over a bottomless void. At the far end the islands climb to a beam of light: jump up out of the top into Shadow Cliffs. The shadow realm sits on its own in the north-west of the world map.
+11. **Shadow Cliffs** (J): you pop up out of a shaft (drop back down it to return to the graves). Cross broken cliffs over the void, with a high road above, and exit east.
+12. **Ruined Cathedral** (K, finish): the **Wraith Knight** (14 hits). It raises its burning sword and lunges (only the sword hurts: jump it or back off, then hit it while it hangs still), gathers lost souls and flings them at you (swat them out of the air), and blinks out to reappear behind you. You can walk through its ghostly body. Once it's destroyed, the portal behind it opens: step through to win.
 
 Stages are defined in the `STAGES` list in `index.html`; add another entry to add a stage.
 
@@ -82,6 +89,10 @@ assets/          all sprite sheets, art, and audio referenced by index.html
 | `ice_platform.png` | Ice ledge art for the Frozen Spire |
 | `heart_*.png` | The golem's heart: beating, dripping, spinning, landing and bursting frames |
 | `flyer_*.png` | Winged imp frames (hover, fly, dive; 4 each), cut from a sprite sheet; all face right |
+| `graves_background.jpg`, `cliffs_background.jpg`, `cathedral_background.jpg` | Shadow realm backdrops (stages H, J, K) |
+| `plat_*.png` | Shadow realm ledges and ground: floating grave islands (H), cliff chunks (J), cathedral slabs (K) |
+| `wraith_*.png` | Wraith Knight poses (float, raise, slash, glide, hurt, death, remains); all face right |
+| `soul_*.png` | The knight's lost-soul projectiles: gather, fly and burst frames |
 | `rock.png` | Tiled platform/lava-rock art |
 | `flask_0.png`–`flask_4.png` | Life flask HUD, indexed by hits remaining (0 = empty, 4 = full). After the heart, the taller 5-hit flask is built in code from `flask_0` and `flask_4` |
 | `torch_0.png`–`torch_5.png` | Imp-kill-count HUD torch, indexed by progressive ignition state (score 0 already shows the first ember) |
