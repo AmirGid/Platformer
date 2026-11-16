@@ -2102,8 +2102,10 @@
     if (gameState === "playing" && intersects(player, heartBox())){
       heart.state = "taken"; heart.t = 0;
       SFX.play("heal");
-      growFlask(player);                // the golem's heart deepens the flask by one hit
+      // the golem's heart fills the flask and grants the double jump; the
+      // flask keeps its size (growFlask is for a separate max-life pickup)
       player.hp = player.maxHp;
+      if (!player.canDoubleJump){ player.canDoubleJump = true; abilityCard = { state: "pending", t: 0 }; }
       player.invuln = Math.max(player.invuln, 30);
       shake = Math.max(shake, 8);
       heartSpray(40, 6, ["170,20,25", "120,10,15", "255,140,50", "255,200,90"]);
@@ -2176,7 +2178,7 @@
   // ---------- The Frost Wyrm's heart ----------
   // Flung out when the wyrm bursts apart, it lands on the ice and keeps
   // beating, glowing brighter on each beat (8 frames). Touching it fills the
-  // flask and deepens it by one more hit, like the golem's heart.
+  // flask, like the golem's heart.
   var ICE_HEART_SCALE = 0.4;
   var ICE_HEART_FRAMES = [0, 1, 2, 3, 4, 5, 6, 7].map(function(i){
     var im = new Image();
@@ -2236,8 +2238,7 @@
     if (gameState === "playing" && intersects(player, iceHeartBox())){
       h.state = "taken"; h.t = 0;
       SFX.play("heal");
-      growFlask(player, "90,190,255");   // the frozen heart deepens the flask by one more hit
-      player.hp = player.maxHp;
+      player.hp = player.maxHp;          // the frozen heart just fills the flask
       player.invuln = Math.max(player.invuln, 30);
       shake = Math.max(shake, 8);
       buzz(80);
@@ -2287,7 +2288,7 @@
       ctx.shadowColor = "rgba(80,170,255,0.9)";
       ctx.shadowBlur = 10;
       ctx.font = "12px 'Press Start 2P', monospace";
-      ctx.fillText("FLASK +1", sx, GROUND_Y - 90 - h.t * 0.8);
+      ctx.fillText("FULL HEALTH", sx, GROUND_Y - 90 - h.t * 0.8);
       ctx.restore();
     }
   }
@@ -3313,8 +3314,6 @@
     if (b.hp <= 0){
       b.hp = 0;
       setBossState(b, "dead");
-      player.canDoubleJump = true;
-      abilityCard = { state: "pending", t: 0 };
       shake = 26;
       fireballs = [];
       shockwaves = [];
@@ -4887,7 +4886,8 @@
     ctx.closePath();
   }
 
-  // After the golem's heart is taken the flask holds 5 hits and grows taller.
+  // growFlask(p) adds a hit to the flask and stretches it taller (meant for a
+  // separate max-life pickup; the boss hearts only refill it).
   // The tall flask is built from the empty art: a plain band of the glass
   // tube is stretched, and the liquid is painted onto the glass pixels only
   // (so the bone, scale marks and roots stay in front), cut at any level.
