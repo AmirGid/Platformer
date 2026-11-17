@@ -1943,10 +1943,11 @@
     var c = abilityCard;
     if (!c) return;
     c.t += dt;
+    var dash = c.kind === "dash", used = dash ? player.dashes : player.doubleJumps;
     if (c.state === "pending"){
-      if (stageIndex === FROST_STAGE && stageBannerT <= 0){ c.state = "show"; c.t = 0; c.used0 = player.doubleJumps; SFX.play("ability"); }
+      if ((dash || stageIndex === FROST_STAGE) && stageBannerT <= 0){ c.state = "show"; c.t = 0; c.used0 = used; SFX.play("ability"); }
     } else if (c.state === "show"){
-      if ((c.t > 150 && player.doubleJumps - c.used0 >= 2) || c.t > 900){ c.state = "hide"; c.t = 0; }
+      if ((c.t > 150 && used - c.used0 >= 2) || c.t > 900){ c.state = "hide"; c.t = 0; }
     } else if (c.state === "hide" && c.t > 24){
       abilityCard = null;
     }
@@ -1967,6 +1968,90 @@
       }
     }
     return { x: x, y: y, air: air };
+  }
+
+  // Dash demo loop: walk in, dash through an imp at DASH_DEMO_GO, stop.
+  var DASH_DEMO_LOOP = 140, DASH_DEMO_GO = 34, DASH_DEMO_LEN = 9;
+  function dashDemoFigure(tt){
+    var walkEnd = Math.min(tt, DASH_DEMO_GO);
+    var x = walkEnd * 0.7;
+    var dashing = tt >= DASH_DEMO_GO && tt < DASH_DEMO_GO + DASH_DEMO_LEN;
+    if (tt >= DASH_DEMO_GO) x += Math.min(tt - DASH_DEMO_GO, DASH_DEMO_LEN) * 13;
+    return { x: x, dashing: dashing, walking: tt < DASH_DEMO_GO };
+  }
+  function drawDashBadge(x, y, lit){
+    var label = root.classList.contains("touch") ? "DASH" : "SHIFT";
+    ctx.save();
+    roundRect(x - 30, y - 15, 60, 30, 8);
+    ctx.fillStyle = lit ? "rgba(205,170,255,0.95)" : "rgba(40,24,70,0.9)";
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = lit ? "#ffffff" : "rgba(190,150,255,0.7)";
+    ctx.stroke();
+    ctx.fillStyle = lit ? "#1c0d33" : "#eadcff";
+    ctx.font = "9px 'Press Start 2P', monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(label, x, y + 4);
+    ctx.restore();
+  }
+  function drawDashDemo(c, x, y){
+    var dx = x + 24, dy = y + 66, dw = 262, dh = 100;
+    roundRect(dx, dy, dw, dh, 8);
+    ctx.fillStyle = "rgba(110,80,160,0.5)";
+    ctx.fill();
+    var groundY = dy + dh - 14, startX = dx + 30;
+    ctx.fillStyle = "rgba(225,210,255,0.85)";
+    ctx.fillRect(dx + 10, groundY, dw - 20, 3);
+    var tt = Math.floor(c.t) % DASH_DEMO_LOOP, f = dashDemoFigure(tt);
+    // an imp standing in the way
+    var impX = startX + DASH_DEMO_GO * 0.7 + 62, imp = IMP_SPRITES.idle;
+    if (imp && imp.ready){
+      var iS = 0.22, iw = imp.naturalWidth * iS, ih = imp.naturalHeight * iS;
+      ctx.save();
+      ctx.translate(impX, groundY);
+      ctx.scale(-1, 1);                 // facing the player
+      ctx.drawImage(imp, -iw/2, -ih, iw, ih);
+      ctx.restore();
+    }
+    var dimg = PLAYER_SPRITES.dash, S = 0.3;   // same scale for every pose, like in the game
+    // fading copies left behind
+    if (dimg && dimg.ready && tt >= DASH_DEMO_GO && tt < DASH_DEMO_GO + DASH_DEMO_LEN + 12){
+      for (var k = 1; k <= 4; k++){
+        var back = dashDemoFigure(Math.max(DASH_DEMO_GO, tt - k * 2));
+        if (back.x >= f.x - 0.5 && tt < DASH_DEMO_GO + DASH_DEMO_LEN) continue;
+        var age = (tt - (DASH_DEMO_GO + DASH_DEMO_LEN)) / 12;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, (0.38 - k * 0.07) * (age > 0 ? 1 - age : 1));
+        ctx.filter = "brightness(1.6) sepia(1) hue-rotate(220deg) saturate(2.5)";
+        var w0 = dimg.naturalWidth * S, h0 = dimg.naturalHeight * S;
+        ctx.drawImage(dimg, startX + back.x - w0 * 0.55, groundY - h0, w0, h0);
+        ctx.restore();
+      }
+    }
+    // speed lines while dashing
+    if (f.dashing){
+      for (var l = 0; l < 4; l++){
+        var ly = groundY - 8 - l * 9, len = 26 + (l * 13) % 22;
+        var grad = ctx.createLinearGradient(startX + f.x - 22, 0, startX + f.x - 22 - len, 0);
+        grad.addColorStop(0, "rgba(30,15,50,0.8)"); grad.addColorStop(1, "rgba(30,15,50,0)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(startX + f.x - 22 - len, ly, len, 2);
+      }
+    }
+    // the little player
+    var key = f.dashing ? "dash" : f.walking ? ["walk0", "walk2", "walk4", "walk6"][Math.floor(tt / 6) % 4] : "idle";
+    var img = PLAYER_SPRITES[key];
+    if (img && img.ready){
+      var s2 = 0.3, w = img.naturalWidth * s2, h = img.naturalHeight * s2;
+      ctx.save();
+      ctx.translate(startX + f.x, groundY);
+      if (!SPRITE_FACES_RIGHT[key]) ctx.scale(-1, 1);   // face right
+      ctx.drawImage(img, f.dashing ? -w * 0.55 : -w/2, -h, w, h);
+      ctx.restore();
+    }
+    // the dash key lights up as the dash starts
+    var since = tt - DASH_DEMO_GO;
+    drawDashBadge(dx + dw + 52, dy + dh/2 - 4, since >= 0 && since < 10);
   }
 
   function drawJumpBadge(x, y, lit){
@@ -1993,15 +2078,35 @@
     ctx.globalAlpha = a;
 
     // panel
+    var dashCard = c.kind === "dash";
     roundRect(x, y, CARD_W, CARD_H, 14);
-    ctx.fillStyle = "rgba(6,16,30,0.86)";
+    ctx.fillStyle = dashCard ? "rgba(18,8,32,0.88)" : "rgba(6,16,30,0.86)";
     ctx.fill();
     ctx.lineWidth = 2;
-    ctx.strokeStyle = "rgba(150,220,255,0.8)";
-    ctx.shadowColor = "rgba(90,190,255,0.8)";
+    ctx.strokeStyle = dashCard ? "rgba(200,160,255,0.85)" : "rgba(150,220,255,0.8)";
+    ctx.shadowColor = dashCard ? "rgba(160,100,255,0.8)" : "rgba(90,190,255,0.8)";
     ctx.shadowBlur = 16;
     ctx.stroke();
     ctx.shadowBlur = 0;
+    if (dashCard){
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#d8c2ff";
+      ctx.font = "10px 'Press Start 2P', monospace";
+      ctx.fillText("NEW ABILITY", VW/2, y + 26);
+      ctx.fillStyle = "#f4ecff";
+      ctx.shadowColor = "rgba(170,110,255,0.9)";
+      ctx.shadowBlur = 12;
+      ctx.font = "20px 'Press Start 2P', monospace";
+      ctx.fillText("DASH", VW/2, y + 54);
+      ctx.shadowBlur = 0;
+      drawDashDemo(c, x, y);
+      ctx.fillStyle = "#e6daf7";
+      ctx.font = "9px 'Press Start 2P', monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(root.classList.contains("touch") ? "TAP DASH TO BURST THROUGH ENEMIES" : "SHIFT OR C TO BURST THROUGH ENEMIES", VW/2, y + CARD_H - 18);
+      ctx.restore();
+      return;
+    }
 
     ctx.textAlign = "center";
     ctx.fillStyle = "#9fe4ff";
@@ -2260,7 +2365,7 @@
       h.state = "taken"; h.t = 0;
       SFX.play("heal");
       player.hp = player.maxHp;          // the frozen heart fills the flask
-      if (!player.canDash){ player.canDash = true; itemCard = { t: 0, kind: "dash" }; SFX.play("ability"); }
+      if (!player.canDash){ player.canDash = true; abilityCard = { state: "pending", t: 0, kind: "dash" }; }
       player.invuln = Math.max(player.invuln, 30);
       shake = Math.max(shake, 8);
       buzz(80);
@@ -2333,6 +2438,7 @@
     if (left && !right) p.facing = -1; else if (right && !left) p.facing = 1;
     p.dashT = DASH_TIME;
     p.dashCd = DASH_COOLDOWN;
+    p.dashes += 1;
     if (!p.onGround) p.airDashUsed = true;
     p.attackT = 0;
     SFX.play("swing");
@@ -2369,7 +2475,7 @@
       canDoubleJump:false, airJumpUsed:false, upHeld:false, doubleJumps:0,
       bigFlask:false, flaskGrowT:0, fillShown:1, flaskFrom:0, flaskTo:0, liquidRows:0, flaskGlow:null,
       hasMap:false, visited:{},
-      canDash:false, dashT:0, dashCd:0, airDashUsed:false, dashTrail:[],
+      canDash:false, dashes:0, dashT:0, dashCd:0, airDashUsed:false, dashTrail:[],
       potions:{}
     };
     mapOpen = false;
