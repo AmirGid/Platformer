@@ -1247,8 +1247,11 @@
   //            through from below and landed on from above.
   //   entryTop: { x, y } where you appear when dropping in from a stage above
   //            (default: x = entryTopX or 120, just above the screen).
-  //   exitTop: { y, to } jumping up past this height goes up to stage "to",
+  //   exitTop: { y, to, x0, x1 } jumping up past this height (within x0-x1
+  //            if given) goes up to stage "to",
   //            popping up out of its drop pit at that stage's entryBelowX.
+  //   potion:  [x, ledgeTop] a max-life flask: picking it up adds a hit to
+  //            the flask and fills it. Each one can be taken once.
   //   finish:  x where a portal stands. With portalTo it carries you to that
   //            stage; without it, reaching it wins the game.
   //   realm:   shadow realm stage: which art set (see REALM_SETS) to build
@@ -1275,8 +1278,10 @@
       platforms: [
         [260, 380, 140], [470, 320, 130], [700, 390, 150], [950, 300, 170],
         [1230, 370, 140], [1460, 300, 150], [1700, 390, 190], [1990, 320, 150],
-        [2230, 400, 180]
+        [2230, 400, 180],
+        [780, 130, 120]     // secret ledge, top right of the first screen: double jump from [470,320] or [950,300]
       ],
+      potion: [840, 130],   // max-life flask on that ledge: x, top of the ledge
       enemies: [
         [340, 290, 470, 1.1], [760, 720, 900, 1.3], [1000, 970, 1130, 1.0],
         [1300, 1250, 1420, 1.2], [1770, 1710, 1880, 1.1], [2050, 2000, 2150, 1.4],
@@ -1444,6 +1449,7 @@
       entryTop: { x: 160, y: -1360 },
       exitTop: { y: -1330, to: 5 },
       dropPit: { pit: 0, to: 7 },
+      entryBelowX: 620,             // where you pop up after climbing back out of the Obsidian Gate
       ground: [[0, 380], [580, 960]],
       platforms: [
         [80, -1150, 200], [380, -1050, 160], [640, -950, 160],
@@ -1470,6 +1476,8 @@
       oneWay: true,
       entryTopX: 160,
       finish: 2500,
+      summit: [800, 140, 140],      // beam of light over the way back up
+      exitTop: { y: 50, to: 6, x0: 780, x1: 960 },   // jumping up off that ledge climbs into The Chute
       portalTo: 9,                  // the portal opens into the shadow realm
       boss: "wyrm",
       arenaX: 1420,                 // walking past this wakes the wyrm
@@ -1477,6 +1485,7 @@
       ground: [[0, 600], [720, 1200], [1320, 2600]],
       platforms: [
         [250, 380, 130], [430, 300, 120], [620, 230, 140],
+        [800, 140, 140],               // the way back up to The Chute (jump up from here)
         [800, 380, 130], [980, 300, 120], [1150, 380, 120],
         [1560, 340, 140], [1900, 280, 150], [2240, 340, 140]   // arena ledges
       ],
@@ -1503,12 +1512,14 @@
       width: 1800,
       topY: -420,
       mapItem: [205, -290],         // the world map scroll: x, top of the ledge it sits on
+      potion: [1660, -250],         // max-life flask on the secret ledge
       ground: [[0, 1800]],
       platforms: [
         [1500, 370, 150], [1280, 280, 140], [1060, 190, 140], [840, 100, 140],
         [620, 10, 140], [400, -80, 140], [180, -180, 140],
         [40, -290, 200],                                      // top left: the map
-        [1450, 140, 120], [1200, -60, 120]
+        [1450, 140, 120], [1200, -60, 120],
+        [1600, -250, 120]   // secret ledge, top right: double jump off [1200,-60], then dash in mid-air
       ],
       enemies: [
         [900, 200, 1700, 0.9, 444],      // floor
@@ -2354,7 +2365,8 @@
       canDoubleJump:false, airJumpUsed:false, upHeld:false, doubleJumps:0,
       bigFlask:false, flaskGrowT:0, fillShown:1, flaskFrom:0, flaskTo:0, liquidRows:0, flaskGlow:null,
       hasMap:false, visited:{},
-      canDash:false, dashT:0, dashCd:0, airDashUsed:false, dashTrail:[]
+      canDash:false, dashT:0, dashCd:0, airDashUsed:false, dashTrail:[],
+      potions:{}
     };
     mapOpen = false;
     itemCard = null;
@@ -2533,6 +2545,60 @@
     }
   }
 
+  // ---------- Max-life flask ----------
+  // A small corked bottle on a hard-to-reach ledge. Taking it adds a hit to
+  // the life flask (stretching it taller) and fills it.
+  var POTION_IMG = loadArt("assets/item_flask.png");
+  function potionBox(pt){ return rect(pt[0] - 20, pt[1] - 56, 40, 56); }
+  function updatePotion(dt){
+    var pt = STAGES[stageIndex].potion;
+    if (!pt || player.potions[stageIndex] || gameState !== "playing") return;
+    if (!intersects(player, potionBox(pt))) return;
+    player.potions[stageIndex] = true;
+    growFlask(player);
+    player.hp = player.maxHp;
+    player.invuln = Math.max(player.invuln, 30);
+    itemCard = { t: 0, kind: "flask" };
+    SFX.play("heal");
+    SFX.play("ability");
+    shake = Math.max(shake, 6);
+    buzz([60, 40, 90]);
+    for (var i = 0; i < 30; i++){
+      var ang = Math.random() * Math.PI * 2, sp = 1 + Math.random() * 4, life = 22 + Math.random() * 22;
+      explosionParticles.push({ x: pt[0], y: pt[1] - 26, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 1.5,
+        life: life, maxLife: life, size: 1.5 + Math.random() * 2.5, color: ["255,90,90", "200,20,40", "255,200,160"][i % 3] });
+    }
+  }
+  function drawPotion(){
+    var pt = STAGES[stageIndex].potion;
+    if (!pt || player.potions[stageIndex]) return;
+    var sx = pt[0] - camX;
+    if (sx < -60 || sx > VW + 60) return;
+    var bob = Math.sin(timeAlive * 0.07) * 4, cy = pt[1] - 30 + bob;
+    var pulse = 0.5 + 0.5 * Math.sin(timeAlive * 0.1);
+    ctx.save();
+    var g = ctx.createRadialGradient(sx, cy, 3, sx, cy, 46);
+    g.addColorStop(0, "rgba(255,70,80," + (0.35 + 0.25 * pulse).toFixed(2) + ")");
+    g.addColorStop(1, "rgba(200,20,40,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(sx - 46, cy - 46, 92, 92);
+    // a few sparks drifting up
+    for (var k = 0; k < 4; k++){
+      var t = (timeAlive * 0.4 + k * 2.5) % 10;
+      ctx.fillStyle = "rgba(255,150,150," + (Math.max(0, 1 - t / 10) * 0.9).toFixed(2) + ")";
+      ctx.beginPath(); ctx.arc(sx + Math.sin(timeAlive * 0.05 + k * 1.7) * 14, cy + 10 - t * 5, 1.5, 0, Math.PI * 2); ctx.fill();
+    }
+    if (POTION_IMG.ready){
+      var h = 40, w = h * POTION_IMG.naturalWidth / POTION_IMG.naturalHeight;
+      ctx.translate(sx, cy);
+      ctx.rotate(Math.sin(timeAlive * 0.05) * 0.08);
+      ctx.drawImage(POTION_IMG, -w / 2, -h / 2, w, h);
+    } else {
+      ctx.fillStyle = "#b0202c"; ctx.beginPath(); ctx.arc(sx, cy, 10, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
   // ---------- World map ----------
   // A scroll in the Frozen Den. Once picked up, M (or the map button) opens a
   // map of the stages you have visited, with a marker where you are now.
@@ -2634,14 +2700,22 @@
     ctx.shadowBlur = 14;
     ctx.stroke();
     ctx.shadowBlur = 0;
-    var dash = itemCard.kind === "dash", di = PLAYER_SPRITES.dash;
+    var dash = itemCard.kind === "dash", di = PLAYER_SPRITES.dash, flask = itemCard.kind === "flask";
     if (dash){
       if (di && di.ready){ var dw = 86, dh = dw * di.naturalHeight / di.naturalWidth; ctx.drawImage(di, x + 12, y + h/2 - dh/2, dw, dh); }
+    } else if (flask){
+      if (POTION_IMG.ready){ var fh = 78, fw = fh * POTION_IMG.naturalWidth / POTION_IMG.naturalHeight; ctx.drawImage(POTION_IMG, x + 54 - fw/2, y + h/2 - fh/2, fw, fh); }
     } else drawScroll(x + 58, y + h/2, 1.5);
     ctx.textAlign = "left";
     ctx.fillStyle = "#f3d58e";
     ctx.font = "10px 'Press Start 2P', monospace";
     ctx.fillText(dash ? "NEW ABILITY" : "NEW ITEM", x + 104, y + 36);
+    if (flask){
+      ctx.fillStyle = "#fff4dc"; ctx.font = "16px 'Press Start 2P', monospace"; ctx.fillText("FLASK +1", x + 104, y + 64);
+      ctx.fillStyle = "#e6d3b0"; ctx.font = "9px 'Press Start 2P', monospace"; ctx.fillText("MAX LIFE UP", x + 104, y + 90);
+      ctx.restore();
+      return;
+    }
     ctx.fillStyle = "#fff4dc";
     ctx.font = "16px 'Press Start 2P', monospace";
     ctx.fillText(dash ? "DASH" : "WORLD MAP", x + 104, y + 64);
@@ -3024,6 +3098,7 @@
     if (gameState !== "playing") return;
     if (mapOpen) return;               // the world map pauses the game
     updateMapItem(dt);
+    updatePotion(dt);
     updatePortalShut(dt);
     timeAlive += dt;
 
@@ -3238,7 +3313,8 @@
 
     // jumping up out of the top of a tall stage climbs into the stage above
     var up = STAGES[stageIndex].exitTop;
-    if (up && player.vy < 0 && player.y + player.h < up.y && gameState === "playing"){
+    if (up && player.vy < 0 && player.y + player.h < up.y && gameState === "playing" &&
+        (up.x0 === undefined || (player.x + player.w > up.x0 && player.x < up.x1))){
       loadStage(up.to, "below");
       return;
     }
@@ -5210,6 +5286,7 @@
     drawSummit();
     drawFinishGate();
     drawMapItem();
+    drawPotion();
     drawExitHints();
     enemies.forEach(drawEnemy);
     drawBoss();
@@ -5491,27 +5568,31 @@
   }
 
   // ---------- Loop ----------
-  var lastTime = null;
+  // Fixed-step loop. The physics moves things a fixed amount per update
+  // (positions add their velocity once per step), so it must run at a steady
+  // 60 steps a second whatever rate the browser draws at: Chrome on a Mac
+  // drops to 30 fps to save power (which made walking slow and jumps low),
+  // and 120 Hz screens would make it too fast. Real time is banked and spent
+  // in 1/60 s steps; the scene is drawn once per browser frame.
+  var lastTime = null, stepBank = 0;
+  var STEP_MS = 1000 / 60, MAX_STEPS = 8;
   function frame(ts){
     if (lastTime === null) lastTime = ts;
     var dtMs = ts - lastTime;
     lastTime = ts;
-    var dt = dtMs / 16.6667;
-    // A big stall (audio decoding, tab backgrounded, a GC pause, etc.) would
-    // otherwise inject one oversized physics step - e.g. applying several
-    // frames' worth of gravity in a single frame cuts a jump's upward
-    // velocity down disproportionately, making it peak lower than normal.
-    // Past a certain gap, skip that frame's simulation entirely rather than
-    // trying to catch up; moderate lag still gets clamped and caught up.
-    if (dt > 5) dt = 0;
-    else if (dt > 2.5) dt = 2.5;
-
-    if (paused){
-      // frozen: draw the scene behind the menu but don't advance it
-    } else if (hitStop > 0){
-      hitStop -= dt;                    // hit-stop: hold the frame, keep the shake
-    } else {
-      update(dt);
+    // after a long stall (tab in the background, a hiccup) don't fast-forward
+    if (dtMs > 250) dtMs = 0;
+    stepBank += dtMs / STEP_MS;
+    if (stepBank > MAX_STEPS) stepBank = MAX_STEPS;
+    while (stepBank >= 1){
+      stepBank -= 1;
+      if (paused){
+        // frozen: draw the scene behind the menu but don't advance it
+      } else if (hitStop > 0){
+        hitStop -= 1;                   // hit-stop: hold the frame, keep the shake
+      } else {
+        update(1);
+      }
     }
     render();
     updateTouchUi();
