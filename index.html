@@ -4510,8 +4510,9 @@
     var aspect = srcW / srcH;
     var tileW = ROCK_TILE_H * aspect;
 
-    if (p.w <= tileW){
-      // small platform: shrink the whole chunk (both tapered ends visible), no distortion
+    if (p.w <= tileW && !p.ground){
+      // small ledge: shrink the whole chunk (both tapered ends visible), no
+      // distortion. Ground pieces always use the floor below, however short.
       var h = p.w / aspect;
       ctx.drawImage(rockImg, sx, p.y, p.w, h);
     } else {
