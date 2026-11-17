@@ -1253,8 +1253,10 @@
   //            popping up out of its drop pit at that stage's entryBelowX.
   //   potion:  [x, ledgeTop] a max-life flask: picking it up adds a hit to
   //            the flask and fills it. Each one can be taken once.
-  //   finish:  x where a portal stands. With portalTo it carries you to that
-  //            stage; without it, reaching it wins the game.
+  //   finish:  x where the final portal stands on the ground; reaching it
+  //            wins the game.
+  //   portal:  { x, y, to } a portal standing on a ledge at height y (its
+  //            base); stepping into it carries you to stage "to".
   //   realm:   shadow realm stage: which art set (see REALM_SETS) to build
   //            with. Its pits are a bottomless void.
   //   arrival: x of the portal you step out of when you arrive here.
@@ -1265,7 +1267,8 @@
   //   [8] Smoldering Den = [2] Molten Core / [3] Frozen Spire   [6] The Chute
   //                            (E: not built yet)                    | pit
   //                                                             [7] Obsidian Gate
-  //   The Obsidian Gate's portal leads to the shadow realm, off on its own:
+  //   A portal on a secret ledge in the Frozen Den (double jump + dash) leads
+  //   to the shadow realm, off on its own:
   //   [10] Shadow Cliffs = [11] Ruined Cathedral (the Wraith Knight)
   //     | climb up
   //   [9] Haunted Graves (you arrive here)
@@ -1476,10 +1479,9 @@
       ice: true,
       oneWay: true,
       entryTopX: 160,
-      finish: 2500,
+      wyrmX: 2380,                  // where the wyrm sleeps, over the far end of the wastes
       summit: [800, 140, 140],      // beam of light over the way back up
       exitTop: { y: 50, to: 6, x0: 780, x1: 960 },   // jumping up off that ledge climbs into The Chute
-      portalTo: 9,                  // the portal opens into the shadow realm
       boss: "wyrm",
       arenaX: 1420,                 // walking past this wakes the wyrm
       width: 2600,
@@ -1511,16 +1513,17 @@
       ice: true,
       oneWay: true,
       width: 1800,
-      topY: -420,
+      topY: -540,                   // room above the secret ledge so its portal shows in full
       mapItem: [205, -290],         // the world map scroll: x, top of the ledge it sits on
-      potion: [1660, -250],         // max-life flask on the secret ledge
+      potion: [1635, -250],         // max-life flask on the secret ledge
+      portal: { x: 1700, y: -250, to: 9 },   // the portal into the shadow realm, beside it
       ground: [[0, 1800]],
       platforms: [
         [1500, 370, 150], [1280, 280, 140], [1060, 190, 140], [840, 100, 140],
         [620, 10, 140], [400, -80, 140], [180, -180, 140],
         [40, -290, 200],                                      // top left: the map
         [1450, 140, 120], [1200, -60, 120],
-        [1600, -250, 120]   // secret ledge, top right: double jump off [1200,-60], then dash in mid-air
+        [1600, -250, 190]   // secret ledge, top right: double jump off [1200,-60], then dash in mid-air
       ],
       enemies: [
         [900, 200, 1700, 0.9, 444],      // floor
@@ -1533,7 +1536,7 @@
       ]
     },
     {
-      // H: through the Obsidian Gate's portal into the shadow realm. A
+      // H: through the Frozen Den's portal into the shadow realm. A
       // graveyard of floating islands; the islands at the far end climb to a
       // beam of light: jump up out of the top into the Shadow Cliffs.
       name: "Haunted Graves",
@@ -2742,7 +2745,7 @@
     "8":    { x: 0,   y: 104, w: 112, h: 56, name: "Frozen Den",    color: "#2f6080" },
     "6":    { x: 429, y: 64,  w: 34,  h: 32, name: "",              color: "#3a1a44" },
     "7":    { x: 390, y: 104, w: 112, h: 56, name: "Obsidian Gate", color: "#2f5a7a" },
-    // the shadow realm, reached only through the Obsidian Gate's portal:
+    // the shadow realm, reached only through the Frozen Den's portal:
     // far off in the top right corner, cut off from the rest of the world
     "9":    { x: 760, y: -150, w: 112, h: 56, name: "Haunted Graves", color: "#3b2d55", realm: true },
     "10":   { x: 760, y: -250, w: 112, h: 56, name: "Shadow Cliffs",  color: "#2c2342", realm: true },
@@ -3325,14 +3328,14 @@
 
     // stepping into an open portal: the Obsidian Gate's carries you into
     // the shadow realm; the cathedral's wins the game
-    var stg = STAGES[stageIndex], fin = stg.finish;
+    var stg = STAGES[stageIndex], fin = stg.finish, pz = stg.portal;
+    if (pz && gameState === "playing" && intersects(player, rect(pz.x + 5, pz.y - 150, 50, 150))){
+      SFX.play("ability");
+      buzz(60);
+      loadStage(pz.to, "portal");
+      return;
+    }
     if (fin && !gateSealed() && player.x + player.w >= fin && gameState === "playing"){
-      if (stg.portalTo !== undefined){
-        SFX.play("ability");
-        buzz(60);
-        loadStage(stg.portalTo, "portal");
-        return;
-      }
       gameState = "win";
       var lifePct = Math.round((player.hp / player.maxHp) * 100);
       SFX.play("win");
@@ -3500,6 +3503,7 @@
         var wasZero = freezeT === 0;
         freezeT = Math.min(1, (b.dead_t - FREEZE_START) / FREEZE_LEN);
         if (wasZero){ shake = Math.max(shake, 8); SFX.play("freeze"); }
+        shatterFireLedges();
         if (freezeT >= 1 && stageIndex !== FROST_STAGE) freezeArena();
       }
       return;
@@ -3758,7 +3762,7 @@
 
   function makeWyrm(stage){
     return {
-      kind: "wyrm", x: stage.finish - 120, y: WYRM_HOVER - 70, vx: 0, vy: 0, facing: -1,
+      kind: "wyrm", x: stage.wyrmX, y: WYRM_HOVER - 70, vx: 0, vy: 0, facing: -1,
       hp: WYRM_HP, maxHp: WYRM_HP, phase2: false, arenaX: stage.arenaX,
       state: "waiting", t: 0, anim: 0, nextAttackIn: 90, side: -1,
       hitFlash: 0, invuln: 0, dead_t: 0
@@ -4349,8 +4353,8 @@
   // Jagged ring that the frost spreads out in, centred on the golem's rubble.
   var FROST_EDGE = [];
   for (var fe = 0; fe < 72; fe++) FROST_EDGE.push(0.88 + Math.random() * 0.24 * (fe % 2 ? 1 : 0.4));
-  function frostPath(cx, cy, r){
-    ctx.beginPath();
+  function frostPath(cx, cy, r, addToPath){
+    if (!addToPath) ctx.beginPath();
     for (var i = 0; i < FROST_EDGE.length; i++){
       var ang = i / FROST_EDGE.length * Math.PI * 2;
       var rr = r * FROST_EDGE[i];
@@ -5286,8 +5290,15 @@
     ctx.save();
     ctx.translate(0, -Math.round(camY));
     drawPits();
-    allPlatforms.forEach(drawPlatform);
-    if (freezeT > 0 && stageIndex === 2) drawFreezingLedges();
+    if (freezeT > 0 && stageIndex === 2){
+      // while the frost spreads: the fire ledges vanish wherever it has
+      // reached, and the ice ledges appear there instead
+      allPlatforms.forEach(function(p){ if (p.ground) drawPlatform(p); });
+      drawThawingLedges();
+      drawFreezingLedges();
+    } else {
+      allPlatforms.forEach(drawPlatform);
+    }
     drawSummit();
     drawFinishGate();
     drawMapItem();
@@ -5316,6 +5327,43 @@
   }
 
   // While the frost spreads, the new ice ledges grow inside the frozen area.
+  // The moment the frost front touches a fire ledge it cracks apart in a
+  // burst of ice and rock and is gone (drawThawingLedges skips it).
+  function shatterFireLedges(){
+    if (stageIndex !== 2) return;
+    var cx = boss ? boss.x : WORLD_W/2, cy = GROUND_Y - 60, r = freezeRadius() * 0.88;
+    allPlatforms.forEach(function(p){
+      if (p.ground || p.shattered) return;
+      var nx = Math.max(p.x, Math.min(cx, p.x + p.w)), ny = Math.max(p.y, Math.min(cy, p.y + p.h));
+      if ((nx - cx) * (nx - cx) + (ny - cy) * (ny - cy) > r * r) return;
+      p.shattered = true;
+      SFX.play("swat", near(p.x + p.w/2, p.y));
+      for (var i = 0; i < 26; i++){
+        var life = 20 + Math.random() * 22, ang = -Math.PI * Math.random();
+        explosionParticles.push({ x: p.x + Math.random() * p.w, y: p.y + Math.random() * p.h,
+          vx: Math.cos(ang) * (1 + Math.random() * 3), vy: Math.sin(ang) * (1 + Math.random() * 2.5) + 1,
+          life: life, maxLife: life, size: 1.5 + Math.random() * 3,
+          color: ["220,245,255", "150,215,255", "90,60,50", "255,140,60"][i % 4] });
+      }
+    });
+    // a shattered ledge is gone for good: nothing left to stand on
+    allPlatforms = allPlatforms.filter(function(p){ return !p.shattered; });
+  }
+
+  // the fire ledges, drawn only outside the frost
+  function drawThawingLedges(){
+    var c = freezeCentre();
+    ctx.save();
+    ctx.translate(0, camY);              // clip in screen space...
+    ctx.beginPath();
+    ctx.rect(-50, -50, VW + 100, VH + 100);
+    frostPath(c.x, c.y, freezeRadius(), true);
+    ctx.clip("evenodd");
+    ctx.translate(0, -camY);             // ...draw in world space
+    allPlatforms.forEach(function(p){ if (!p.ground && !p.shattered) drawPlatform(p); });
+    ctx.restore();
+  }
+
   function drawFreezingLedges(){
     if (!frostPlatforms) frostPlatforms = buildPlatforms(STAGES[FROST_STAGE]);
     var c = freezeCentre();
@@ -5383,6 +5431,8 @@
   function drawFinishGate(){
     var arr = STAGES[stageIndex].arrival;
     if (arr !== undefined) drawGatePortal(arr, arrivalOpen());
+    var pz = STAGES[stageIndex].portal;
+    if (pz) drawGatePortal(pz.x, 1, pz.y);
     drawGatePortal(STAGES[stageIndex].finish);
     var fin = STAGES[stageIndex].finish;
     if (fin === undefined || !gateSealed()) return;
@@ -5469,10 +5519,10 @@
     ctx.restore();
   }
 
-  function drawGatePortal(fin, open){
+  function drawGatePortal(fin, open, baseY){
     if (fin === undefined) return;
     if (open === undefined) open = 1;
-    var cx = fin + 30 - camX, base = GROUND_Y, w = 90, h = 170;
+    var cx = fin + 30 - camX, base = baseY === undefined ? GROUND_Y : baseY, w = 90, h = 170;
     if (cx < -150 || cx > VW + 150) return;
     var t = timeAlive;
     ctx.save();

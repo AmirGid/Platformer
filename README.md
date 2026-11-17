@@ -9,16 +9,16 @@ Stages are linked metroidvania style: walk off an edge or drop down a shaft to r
 ```
  Shadow Cliffs (J) = Ruined Cathedral (K, finish)
        | climb up
- Haunted Graves (H)   <- reached only through the Obsidian Gate's portal
+ Haunted Graves (H)   <- reached only through the Frozen Den's secret portal
 
  Moonlit Ridge = Ember Hollow = Ashen Woods = Cinder Cliffs
                       | shaft                     | shaft
  Frozen Den     = Molten Core /              The Chute
                   Frozen Spire                    | shaft
-                                             Obsidian Gate -> portal to Haunted Graves
+                                             Obsidian Gate (Frost Wyrm)
 ```
 
-The route: Ember Hollow, down into the golem's room, beat it, climb the Frozen Spire back up into Ember Hollow, then east through Ashen Woods (needs the double jump) and Cinder Cliffs, down The Chute to the Obsidian Gate, whose portal throws you into the shadow realm: up through Haunted Graves and Shadow Cliffs to the Ruined Cathedral.
+The route: Ember Hollow, down into the golem's room, beat it, climb the Frozen Spire back up into Ember Hollow, then east through Ashen Woods (needs the double jump) and Cinder Cliffs, down The Chute to the Obsidian Gate, where the Frost Wyrm's heart gives you the dash. Climb back out, return to the Frozen Den and double-jump and dash up to its secret ledge: the portal there throws you into the shadow realm, up through Haunted Graves and Shadow Cliffs to the Ruined Cathedral.
 
 1. **Moonlit Ridge** (start): solid ground and scattered rock ledges. Exit east to Ember Hollow.
 2. **Ember Hollow**: lava pits in the ground (falling in costs one flask hit and sends you back to the stage entrance), a high staircase route and more, faster imps. The last pit is a dark shaft instead of lava: drop into it to reach the Molten Core. Exit east to Ashen Woods.
@@ -27,13 +27,13 @@ The route: Ember Hollow, down into the golem's room, beat it, climb the Frozen S
 5. **Ashen Woods**: grey forest east of Ember Hollow. Its last lava gap is too wide for one jump: you need the golem's double jump to reach Cinder Cliffs.
 6. **Cinder Cliffs**: red-lit cliffs with winged imps; the last pit is a shaft down into The Chute.
 7. **The Chute**: a narrow, tall shaft. Work your way down the ledges past winged imps; the pit at the bottom drops into the Obsidian Gate. Double-jump up out of the top to go back to Cinder Cliffs.
-8. **Obsidian Gate**: frozen wastes with frost golems and wisps, then the **Frost Wyrm**. When the wyrm bursts apart it flings out its still-beating **frozen heart**: touch it to fill your flask and unlock the **dash**: press **Shift** (or **C**, or tap the DASH button) for a fast, flat burst the way you're facing. You pass straight through enemies and their attacks while it lasts; on the ground it recharges in about half a second, and in the air you get one dash per jump. A high ice ledge near the start, under a beam of light, leads back: jump up off it to climb into The Chute. Its portal stays sealed in ice until the wyrm is dead; step through it to enter the shadow realm.
+8. **Obsidian Gate**: frozen wastes with frost golems and wisps, then the **Frost Wyrm**. When the wyrm bursts apart it flings out its still-beating **frozen heart**: touch it to fill your flask and unlock the **dash**: press **Shift** (or **C**, or tap the DASH button) for a fast, flat burst the way you're facing. You pass straight through enemies and their attacks while it lasts; on the ground it recharges in about half a second, and in the air you get one dash per jump. A high ice ledge near the start, under a beam of light, leads back: jump up off it to climb into The Chute.
 9. **Frozen Den**: an icy side cave west of the golem's room. Climb its ice ledges to the top left to find the **world map**: once you have it, press **M** (or tap the map button) to open a map of the stages you've visited, with a marker showing where you are. The game pauses while it's open.
 10. **Haunted Graves** (H): you step out of the portal into a violet graveyard of floating islands over a bottomless void. At the far end the islands climb to a beam of light: jump up out of the top into Shadow Cliffs. Its enemies are **scythe wraiths** (hooded reapers that float over their patch of ground, raise their scythe as a warning, then glide forward and swing) and **wailing ghosts** (they drift between spots, scream, then spit a cursed soul you can swat away); both take two hits. The shadow realm sits far off in the top-right corner of the world map, cut off from the rest of the world.
 11. **Shadow Cliffs** (J): you pop up out of a shaft (drop back down it to return to the graves). Cross broken cliffs over the void, with a high road above, and exit east. Scythe wraiths and wailing ghosts guard the way here too.
 12. **Ruined Cathedral** (K, finish): the **Wraith Knight** (14 hits). It raises its burning sword and lunges (only the sword hurts: jump it or back off, then hit it while it hangs still), gathers lost souls and flings them at you (swat them out of the air), and blinks out to reappear behind you. You can walk through its ghostly body. Once it's destroyed, the portal behind it opens: step through to win.
 
-**Max-life flasks**: two small corked bottles are hidden on secret ledges. Each adds a hit to your life flask (it stretches taller) and fills it. One sits at the top right of the very first screen and needs the double jump; the other is at the top right of the Frozen Den and needs a double jump off the highest right-hand ledge followed by a mid-air dash.
+**Max-life flasks**: two small corked bottles are hidden on secret ledges. Each adds a hit to your life flask (it stretches taller) and fills it. One sits at the top right of the very first screen and needs the double jump; the other is at the top right of the Frozen Den and needs a double jump off the highest right-hand ledge followed by a mid-air dash. The portal into the shadow realm stands on that same ledge, right beside it.
 
 Stages are defined in the `STAGES` list in `index.html`; add another entry to add a stage.
 
