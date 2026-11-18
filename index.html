@@ -131,6 +131,14 @@
   .pausebtn{ right:calc(12.5% - 42px); font:bold 12px/32px 'IBM Plex Mono', monospace; letter-spacing:-1px; }
   html.menu .pausebtn{ display:none; }
   html.paused .touchpad{ visibility:hidden; }
+  /* ending cinematic: covers the game, with a skip button in the corner */
+  .endvideo{ position:absolute; inset:0; z-index:8; background:#000; display:flex; align-items:center; justify-content:center; }
+  .endvideo[hidden]{ display:none; }
+  .endvideo video{ width:100%; height:100%; object-fit:contain; }
+  .endvideo .skipbtn{ position:absolute; right:3%; bottom:5%; padding:6px 14px; border-radius:16px;
+    border:1px solid rgba(255,200,160,0.45); background:rgba(10,6,8,0.6); color:#f3e2c4;
+    font:bold 12px 'IBM Plex Mono', monospace; letter-spacing:1px; cursor:pointer; }
+  html.cutscene .touchpad, html.cutscene .mutebtn{ visibility:hidden; }
   .pausepanel .setting{ display:flex; align-items:center; justify-content:space-between; gap:14px; margin:0 0 14px; color:#e6d3b0; font-size:13px; text-align:left; }
   .pausepanel .setting[hidden]{ display:none; }
   .pausepanel input[type=range]{ flex:1; max-width:190px; accent-color:#ff7a1f; }
@@ -435,6 +443,10 @@
           <p id="overlayText"></p>
           <button class="playbtn" id="overlayBtn">Enter the Void</button>
         </div>
+      </div>
+      <div class="endvideo" id="endVideoWrap" hidden>
+        <video id="endVideo" src="assets/ending.mp4?v=2" playsinline preload="none"></video>
+        <button class="skipbtn" id="skipVideoBtn" type="button">SKIP &#9654;&#9654;</button>
       </div>
       <div class="overlay" id="pauseMenu" hidden>
         <div class="panel pausepanel" role="dialog" aria-label="Paused">
@@ -2983,6 +2995,7 @@
   // Shared by the keyboard and the on-screen touch buttons.
   function pressKey(code){
     if (paused){ if (code === "KeyP" || code === "Escape") togglePause(); return; }
+    if (cutscene){ if (code === "Escape" || code === "Enter" || code === "Space") endEnding(); return; }
     keys[code] = true;
     if (code === "KeyR" && (gameState === "gameover" || gameState === "win")) {
       startGame();
@@ -3003,6 +3016,11 @@
   }
 
   window.addEventListener("keydown", function(e){
+    if (cutscene){
+      e.preventDefault();
+      if (e.code === "Escape" || e.code === "Enter" || e.code === "Space") endEnding();
+      return;
+    }
     if (paused){
       // let the menu's sliders and buttons use the keyboard normally
       if (e.code === "KeyP" || e.code === "Escape"){ e.preventDefault(); togglePause(); }
@@ -3107,7 +3125,44 @@
   sfxSlider.value = Math.round(sfxVol * 100);
   vibeToggle.checked = vibeOn;
 
+  // ---------- Ending cinematic ----------
+  // Plays once the Wraith Knight finishes dying; the game holds still
+  // underneath and picks up again (gate open) when it ends or is skipped.
+  var cutscene = false, endingPlayed = false;
+  var endVideoWrap = document.getElementById("endVideoWrap");
+  var endVideo = document.getElementById("endVideo");
+  function playEnding(){
+    if (endingPlayed) return;
+    endingPlayed = true; cutscene = true;
+    releaseAllKeys();
+    bgMusic.pause();
+    endVideo.muted = SFX.isMuted();
+    endVideo.volume = Math.max(0, Math.min(1, Math.max(musicVol, sfxVol)));
+    endVideo.currentTime = 0;
+    endVideoWrap.hidden = false;
+    root.classList.add("cutscene");
+    var pr = endVideo.play();
+    if (pr && pr.catch) pr.catch(function(){
+      // a browser that refuses sound still plays it muted
+      endVideo.muted = true;
+      var p2 = endVideo.play(); if (p2 && p2.catch) p2.catch(function(){ endEnding(); });
+    });
+  }
+  function endEnding(){
+    if (!cutscene) return;
+    cutscene = false;
+    endVideo.pause();
+    endVideoWrap.hidden = true;
+    root.classList.remove("cutscene");
+    releaseAllKeys();
+    if (musicStarted && gameState === "playing"){ var pr = bgMusic.play(); if (pr && pr.catch) pr.catch(function(){}); }
+    canvas.focus();
+  }
+  endVideo.addEventListener("ended", endEnding);
+  document.getElementById("skipVideoBtn").addEventListener("click", function(e){ e.stopPropagation(); endEnding(); });
+
   function setPaused(p){
+    if (p && cutscene) return;
     if (p && gameState !== "playing") return;
     if (p === paused) return;
     paused = p;
@@ -3161,6 +3216,7 @@
   window.addEventListener("blur", function(){ setPaused(true); });
 
   function startGame(){
+    endEnding(); endingPlayed = false;
     paused = false;
     pauseMenu.hidden = true;
     root.classList.remove("paused");
@@ -4150,6 +4206,7 @@
   var WRAITH_DIE_T = 90;             // the portal opens this long after it dies
 
   function makeWraith(stage){
+    if (endVideo) endVideo.preload = "auto";   // start fetching the ending during the fight
     return {
       kind: "wraith", x: stage.finish - 260, y: WRAITH_Y, vx: 0, facing: -1,
       hp: WRAITH_HP, maxHp: WRAITH_HP, phase2: false, arenaX: stage.arenaX,
@@ -4222,6 +4279,7 @@
       if (b.y < GROUND_Y - 120) b.y += 0.6 * dt;     // sinks as it comes apart
       if (before < 50 && b.dead_t >= 50){ shake = 26; wraithBurst(b.x, b.y + 50, 80, 8); SFX.play("explosion"); }
       if (before < WRAITH_DIE_T && b.dead_t >= WRAITH_DIE_T){ SFX.play("ability"); shake = Math.max(shake, 8); }
+      if (before < WRAITH_DIE_T + 30 && b.dead_t >= WRAITH_DIE_T + 30) playEnding();
       return;
     }
     var mul = b.phase2 ? 1.3 : 1;
@@ -5747,7 +5805,7 @@
     if (stepBank > MAX_STEPS) stepBank = MAX_STEPS;
     while (stepBank >= 1){
       stepBank -= 1;
-      if (paused){
+      if (paused || cutscene){
         // frozen: draw the scene behind the menu but don't advance it
       } else if (hitStop > 0){
         hitStop -= 1;                   // hit-stop: hold the frame, keep the shake
