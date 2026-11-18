@@ -106,6 +106,13 @@ assets/          all sprite sheets, art, and audio referenced by index.html
 | `bgmusic.mp3` | Background music, starts on load |
 | `sfx_laugh.mp3` | Evil-laugh sound effect, played on pressing Start |
 
+## Testing shortcuts (remove before going live)
+
+These are for testing only. **Before the final release, remove both** (they're marked `TESTING ONLY` in `index.html`):
+
+- **Stage links**: add `?stage=` to the address to start in any stage, with the abilities, flasks and beaten bosses you'd have by then. Use the stage number from the in-game banner (`?stage=1` to `?stage=9`), `H`, `J` or `K`, or part of the name (`?stage=den`, `?stage=cathedral`). Add `&god` to switch on god mode for that visit, e.g. `index.html?stage=K&god`.
+- **God mode**: the GOD button (or the G key) makes you impossible to hurt.
+
 ## Notes
 
 All art assets were extracted and cleaned (background removed, cropped, retina-scaled) from hand-drawn reference sprite sheets.

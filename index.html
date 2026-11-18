@@ -770,7 +770,27 @@
     sync();
     btn.addEventListener("click", function(e){ e.stopPropagation(); toggle(); btn.blur(); });
     document.addEventListener("keydown", function(e){ if (e.code === "KeyG") toggle(); });
+    if (/[?&]god\b/.test(location.search)){ godMode = true; sync(); }   // test link, this visit only
   })();
+
+  // TESTING ONLY: stage links. index.html?stage=K (or 1-9, H, J, K, or part
+  // of a stage name, e.g. ?stage=cathedral) starts the game in that stage
+  // with everything you'd have earned on the way there; add &god for god
+  // mode. Remove for the final version along with god mode (this block,
+  // TEST_STAGE in startGame/the title screen, and jumpToStage).
+  function readTestStage(){
+    var m = /[?&]stage=([^&]+)/.exec(location.search);
+    if (!m) return null;
+    var v = decodeURIComponent(m[1]).trim().toLowerCase();
+    if (/^\d+$/.test(v)){ var n = parseInt(v, 10) - 1; return n >= 0 && n < STAGES.length ? n : null; }
+    for (var i = 0; i < STAGES.length; i++){
+      if (STAGES[i].label && STAGES[i].label.toLowerCase() === v) return i;
+    }
+    for (var j = 0; j < STAGES.length; j++){
+      if (STAGES[j].name.toLowerCase().indexOf(v) >= 0) return j;
+    }
+    return null;
+  }
 
   // ---------- Hit feedback ----------
   // hitStop freezes the action for a few frames when a blow lands, so hits
@@ -3156,6 +3176,7 @@
     root.classList.remove("cutscene");
     releaseAllKeys();
     if (musicStarted && gameState === "playing"){ var pr = bgMusic.play(); if (pr && pr.catch) pr.catch(function(){}); }
+    if (gameState === "playing"){ SFX.play("ability"); shake = Math.max(shake, 8); }   // the portal opens
     canvas.focus();
   }
   endVideo.addEventListener("ended", endEnding);
@@ -3215,12 +3236,38 @@
   document.addEventListener("visibilitychange", function(){ if (document.hidden) setPaused(true); });
   window.addEventListener("blur", function(){ setPaused(true); });
 
+  // TESTING ONLY (see TEST_STAGE): drop straight into a stage with the
+  // abilities, flasks and bosses the normal route would leave you with.
+  var TEST_ENTRY = { 2: "top", 6: "top", 7: "top", 8: "right", 9: "portal", 10: "below" };
+  function jumpToStage(i){
+    var p = player;
+    if (i >= 3){ p.canDoubleJump = true; arenaFrozen = true; }      // golem beaten
+    if (i >= 4) p.hasMap = true;
+    if (i >= 8){                                                   // frost wyrm beaten
+      p.canDash = true;
+      var w = stageState[7].boss;
+      if (w){ w.state = "dead"; w.dead_t = 999; w.hp = 0; }
+    }
+    if (i >= 8) p.potions[0] = true;                               // first-screen flask
+    if (i >= 9) p.potions[8] = true;                               // Frozen Den flask
+    var extra = Object.keys(p.potions).length;
+    if (extra){
+      p.maxHp = 4 + extra; p.bigFlask = true;
+      p.flaskFrom = p.flaskTo = FLASK_EXTRA * extra; p.flaskGrowT = FLASK_GROW + 200;
+    }
+    p.hp = p.maxHp; p.fillShown = 1;
+    for (var k = 0; k <= i; k++){ if (k < 9 || i >= 9) p.visited[mapKey(k)] = true; }
+    syncMapBtn();
+    loadStage(i, TEST_ENTRY[i] || "left");
+  }
+
   function startGame(){
     endEnding(); endingPlayed = false;
     paused = false;
     pauseMenu.hidden = true;
     root.classList.remove("paused");
     resetGame();
+    if (TEST_STAGE !== null) jumpToStage(TEST_STAGE);
     releaseAllKeys();
     overlay.hidden = true;
     root.classList.remove("menu");
@@ -3231,6 +3278,8 @@
   }
   overlayBtn.addEventListener("click", startGame);
   gameState = "start";
+  var TEST_STAGE = readTestStage();
+  if (TEST_STAGE !== null) overlayBtn.textContent = "Start in " + (STAGES[TEST_STAGE].label ? "Stage " + STAGES[TEST_STAGE].label : STAGES[TEST_STAGE].name);
 
   // ---------- Collision ----------
   function intersects(a,b){
@@ -4278,8 +4327,8 @@
       b.dead_t += dt;
       if (b.y < GROUND_Y - 120) b.y += 0.6 * dt;     // sinks as it comes apart
       if (before < 50 && b.dead_t >= 50){ shake = 26; wraithBurst(b.x, b.y + 50, 80, 8); SFX.play("explosion"); }
-      if (before < WRAITH_DIE_T && b.dead_t >= WRAITH_DIE_T){ SFX.play("ability"); shake = Math.max(shake, 8); }
-      if (before < WRAITH_DIE_T + 30 && b.dead_t >= WRAITH_DIE_T + 30) playEnding();
+      // the ending plays first; the portal only opens once it's over
+      if (before < WRAITH_DIE_T && b.dead_t >= WRAITH_DIE_T) playEnding();
       return;
     }
     var mul = b.phase2 ? 1.3 : 1;
@@ -5587,7 +5636,7 @@
   function gateSealed(){
     if (!boss) return false;
     if (boss.kind === "wyrm") return boss.state !== "dead" || boss.dead_t < 70;
-    if (boss.kind === "wraith") return boss.state !== "dead" || boss.dead_t < WRAITH_DIE_T;
+    if (boss.kind === "wraith") return boss.state !== "dead" || boss.dead_t < WRAITH_DIE_T || !endingPlayed || cutscene;
     return false;
   }
 
