@@ -1182,6 +1182,23 @@
     });
   })();
 
+  // Human form: once the Wraith Knight's ending has played, the curse lifts
+  // and the hero turns back into a young man (human_*.png, cut from the
+  // human sprite sheet). Every frame faces right. HUMAN_SHIFT_X keeps the
+  // hips over the feet, like PLAYER_SHIFT_X does for the shadow form.
+  var HUMAN_SHIFT_X = { attack0: 25.2, attack4: 20.5, change0: 12, change1: 5.4, dash: -4.3, death: -4.9,
+                        hurt: 4.4, idle: -0.6, jump: 0.5, walk0: 0.5, walk1: 8.2, walk2: 10.4 };
+  var HUMAN_WALK_FRAMES = ["walk0", "walk1", "walk2"];
+  var HUMAN_SPRITES = {};
+  Object.keys(HUMAN_SHIFT_X).forEach(function(key){
+    var im = new Image();
+    im.ready = false;
+    im.onload = function(){ im.padB = feetPad(im); im.ready = true; };
+    im.src = "assets/human_" + key + ".png";
+    im.shiftX = HUMAN_SHIFT_X[key];
+    HUMAN_SPRITES[key] = im;
+  });
+
   // Fire-elemental "ignited" form sprites (unlocked at 4+ imps, activated with X).
   var FIRE_SPRITES = {};
   (function(){
@@ -2466,7 +2483,7 @@
   var DASH_SPEED = 14, DASH_TIME = 11, DASH_COOLDOWN = 34, DASH_TRAIL_LIFE = 14;
   function tryDash(){
     var p = player;
-    if (!p || !p.canDash || gameState !== "playing" || mapOpen || p.dashT > 0 || p.dashCd > 0) return;
+    if (!p || !p.canDash || gameState !== "playing" || mapOpen || p.dashT > 0 || p.dashCd > 0 || transformT >= 0) return;
     if (!p.onGround && p.airDashUsed) return;
     var left = keys.ArrowLeft || keys.KeyA, right = keys.ArrowRight || keys.KeyD;
     if (left && !right) p.facing = -1; else if (right && !left) p.facing = 1;
@@ -2510,7 +2527,7 @@
       bigFlask:false, flaskGrowT:0, fillShown:1, flaskFrom:0, flaskTo:0, liquidRows:0, flaskGlow:null,
       hasMap:false, visited:{},
       canDash:false, dashes:0, dashT:0, dashCd:0, airDashUsed:false, dashTrail:[],
-      potions:{}
+      potions:{}, human:false
     };
     mapOpen = false;
     itemCard = null;
@@ -2989,7 +3006,7 @@
       ctx.strokeStyle = "rgba(255,230,140," + (1 - ring).toFixed(2) + ")";
       ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(mx, my - 6, 6 + ring * 12, 0, Math.PI * 2); ctx.stroke();
-      var img = PLAYER_SPRITES.idle;
+      var img = (player.human ? HUMAN_SPRITES : PLAYER_SPRITES).idle;
       if (img && img.ready){
         var hgt = 22 * Math.max(0.8, S), wdt = hgt * img.naturalWidth / img.naturalHeight;
         ctx.save();
@@ -3018,6 +3035,7 @@
   function pressKey(code){
     if (paused){ if (code === "KeyP" || code === "Escape") togglePause(); return; }
     if (cutscene){ if (code === "Escape" || code === "Enter" || code === "Space") endEnding(); return; }
+    if (transformT >= 0 && gameState === "playing") return;   // hold still while changing
     keys[code] = true;
     if (code === "KeyR" && (gameState === "gameover" || gameState === "win")) {
       startGame();
@@ -3151,7 +3169,10 @@
   // Plays once the Wraith Knight finishes dying; the game holds still
   // underneath and picks up again (gate open) when it ends or is skipped.
   var cutscene = false, endingPlayed = false;
-  var cathedralDawn = 0, CATHEDRAL_DAWN_T = 150;   // 0..1 fade to the moonlit cathedral, frames
+  var cathedralDawn = 0, CATHEDRAL_DAWN_T = 150;
+  // the hero's change back into a human, right after the ending (frames)
+  var transformT = -1, transformParts = [];
+  var TRANSFORM_LEN = 170, TRANSFORM_SWAP = 70;   // 0..1 fade to the moonlit cathedral, frames
   var endVideoWrap = document.getElementById("endVideoWrap");
   var endVideo = document.getElementById("endVideo");
   function playEnding(){
@@ -3179,7 +3200,10 @@
     root.classList.remove("cutscene");
     releaseAllKeys();
     if (musicStarted && gameState === "playing"){ var pr = bgMusic.play(); if (pr && pr.catch) pr.catch(function(){}); }
-    if (gameState === "playing"){ SFX.play("ability"); shake = Math.max(shake, 8); }   // the portal opens
+    if (gameState === "playing"){
+      SFX.play("ability"); shake = Math.max(shake, 8);   // the portal opens
+      if (!player.human) transformT = 0;                 // and the curse on the hero lifts
+    }
     canvas.focus();
   }
   endVideo.addEventListener("ended", endEnding);
@@ -3265,7 +3289,7 @@
   }
 
   function startGame(){
-    endEnding(); endingPlayed = false; cathedralDawn = 0;
+    endEnding(); endingPlayed = false; cathedralDawn = 0; transformT = -1; transformParts = [];
     paused = false;
     pauseMenu.hidden = true;
     root.classList.remove("paused");
@@ -3322,6 +3346,8 @@
     updatePotion(dt);
     updatePortalShut(dt);
     timeAlive += dt;
+    if (transformT >= 0 || transformParts.length) updateTransform(dt);
+    if (transformT >= 0) releaseAllKeys();
 
     var left = keys.ArrowLeft || keys.KeyA;
     var right = keys.ArrowRight || keys.KeyD;
@@ -5113,7 +5139,8 @@
     if (player.dashT > 0) return "dash";
     if (player.attackT > 0) return player.attackT > 8 ? "attack4" : "attack0";
     if (!player.onGround) return "jump";
-    if (player.vx !== 0) return WALK_FRAMES[Math.floor(player.walkCycle) % WALK_FRAMES.length];
+    var wf = player.human && !player.superMode ? HUMAN_WALK_FRAMES : WALK_FRAMES;
+    if (player.vx !== 0) return wf[Math.floor(player.walkCycle) % wf.length];
     return "idle";
   }
 
@@ -5138,7 +5165,7 @@
   var PLAYER_FOOT_LIFT = 7;   // display px between the hitbox bottom and the feet
   // fading shadow copies left behind while dashing, plus speed lines
   function drawDashTrail(){
-    var tr = player.dashTrail, img = PLAYER_SPRITES.dash;
+    var tr = player.dashTrail, img = (player.human ? HUMAN_SPRITES : PLAYER_SPRITES).dash;
     if (!tr.length || !img || !img.ready) return;
     var dW = img.naturalWidth / 2, dH = img.naturalHeight / 2;
     var lift = (img.padB || 0) / 2 - PLAYER_FOOT_LIFT;
@@ -5170,14 +5197,85 @@
     ctx.restore();
   }
 
+  // The change: dark violet wisps spiral into the hero while it glows
+  // brighter, a white flash swaps in the human sprites, then he catches his
+  // breath (clutches his chest, looks at his hands) before standing up.
+  function updateTransform(dt){
+    var before = transformT;
+    if (transformT >= 0){
+      transformT += dt;
+      if (transformT < TRANSFORM_SWAP){
+        var k = transformT / TRANSFORM_SWAP;
+        for (var n = 0; n < 2; n++){
+          transformParts.push({ a: Math.random() * Math.PI * 2, r: 70 + Math.random() * 60, dr: -(1.6 + k * 2.5),
+            da: 0.06, t: 0, life: 34, size: 2 + Math.random() * 3, c: Math.random() < 0.5 ? "120,60,220" : "40,20,70" });
+        }
+        shake = Math.max(shake, 3 * k);
+      }
+      if (before < TRANSFORM_SWAP && transformT >= TRANSFORM_SWAP){
+        player.human = true;
+        SFX.play("ability"); buzz(80);
+        shake = Math.max(shake, 16);
+        explosionFlash = { x: player.x + player.w/2, y: player.y + player.h/2, t: 0, maxT: 30 };
+        for (var m = 0; m < 46; m++){
+          transformParts.push({ a: Math.random() * Math.PI * 2, r: 6, dr: 3 + Math.random() * 5, da: 0.01,
+            t: 0, life: 30 + Math.random() * 20, size: 2 + Math.random() * 3, c: Math.random() < 0.6 ? "235,225,255" : "170,120,255" });
+        }
+      }
+      if (transformT >= TRANSFORM_LEN) transformT = -1;
+    }
+    for (var i = transformParts.length - 1; i >= 0; i--){
+      var q = transformParts[i];
+      q.t += dt; q.r += q.dr * dt; q.a += q.da * dt;
+      if (q.dr > 0) q.dr *= Math.pow(0.95, dt);
+      if (q.t >= q.life || q.r < 2) transformParts.splice(i, 1);
+    }
+  }
+  function transformKey(){
+    if (transformT < 0) return null;
+    if (transformT < TRANSFORM_SWAP) return "idle";
+    if (transformT < TRANSFORM_SWAP + 45) return "change0";
+    if (transformT < TRANSFORM_SWAP + 80) return "change1";
+    return "idle";
+  }
+  function transformGlow(){            // 0..1 white-out of the sprite
+    if (transformT < 0) return 0;
+    if (transformT < TRANSFORM_SWAP) return Math.pow(transformT / TRANSFORM_SWAP, 2);
+    return Math.max(0, 1 - (transformT - TRANSFORM_SWAP) / 34);
+  }
+  function drawTransformParts(){
+    if (!transformParts.length) return;
+    var cx = player.x + player.w/2 - camX, cy = player.y + player.h/2 - 6;
+    ctx.save();
+    for (var i = 0; i < transformParts.length; i++){
+      var q = transformParts[i], a = Math.min(1, 1.4 * (1 - q.t / q.life));
+      ctx.fillStyle = "rgba(" + q.c + "," + a.toFixed(2) + ")";
+      ctx.beginPath();
+      ctx.arc(cx + Math.cos(q.a) * q.r, cy + Math.sin(q.a) * q.r * 0.8, q.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   function drawPlayer(){
     var sx = player.x - camX;
     var blink = player.invuln > 0 && player.invuln <= 50 && Math.floor(player.invuln/4) % 2 === 0;
-    var key = pickPlayerSpriteKey();
-    var spriteSet = player.superMode ? FIRE_SPRITES : PLAYER_SPRITES;
-    var facesRight = player.superMode ? FIRE_SPRITE_FACES_RIGHT : SPRITE_FACES_RIGHT;
+    var key = transformKey() || pickPlayerSpriteKey();
+    var human = player.human && !player.superMode;
+    var spriteSet = player.superMode ? FIRE_SPRITES : human ? HUMAN_SPRITES : PLAYER_SPRITES;
+    var facesRight = player.superMode ? FIRE_SPRITE_FACES_RIGHT : human ? HUMAN_SPRITES : SPRITE_FACES_RIGHT;
     var img = spriteSet[key] || (key === "dash" ? PLAYER_SPRITES.dash : spriteSet.idle);
+    var glow = transformGlow();
     drawDashTrail();
+    if (glow > 0){
+      // violet aura building up behind the hero
+      var ax = sx + player.w/2, ay = player.y + player.h/2 - 6;
+      var ag = ctx.createRadialGradient(ax, ay, 4, ax, ay, 90);
+      ag.addColorStop(0, "rgba(200,170,255," + (0.55 * glow).toFixed(2) + ")");
+      ag.addColorStop(1, "rgba(120,60,220,0)");
+      ctx.fillStyle = ag;
+      ctx.fillRect(ax - 90, ay - 90, 180, 180);
+    }
 
     ctx.save();
     ctx.globalAlpha = blink ? 0.4 : 1;
@@ -5196,6 +5294,13 @@
       // right with their feet ~7px above the hitbox bottom, so all frames use that
       var lift = (img.padB || 0) / 2 - PLAYER_FOOT_LIFT;
       ctx.drawImage(img, -dW/2 + (img.shiftX || 0) / 2, -dH + lift, dW, dH);
+      if (glow > 0){
+        // the same pose as a white silhouette on top: the change's glow
+        ctx.globalAlpha = glow;
+        ctx.filter = "brightness(0) invert(1)";
+        ctx.drawImage(img, -dW/2 + (img.shiftX || 0) / 2, -dH + lift, dW, dH);
+        ctx.filter = "none";
+      }
     } else {
       // fallback silhouette while sprites decode
       ctx.fillStyle = "#1b1f2a";
@@ -5203,6 +5308,7 @@
     }
 
     ctx.restore();
+    drawTransformParts();
   }
 
   function drawHUD(){
