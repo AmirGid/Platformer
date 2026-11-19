@@ -20,8 +20,8 @@ Stages are linked metroidvania style: walk off an edge or drop down a shaft to r
 
 The route: Ember Hollow, down into the golem's room, beat it, climb the Frozen Spire back up into Ember Hollow, then east through Ashen Woods (needs the double jump) and Cinder Cliffs, down The Chute to the Obsidian Gate, where the Frost Wyrm's heart gives you the dash. Climb back out, return to the Frozen Den and double-jump and dash up to its secret ledge: the portal there throws you into the shadow realm, up through Haunted Graves and Shadow Cliffs to the Ruined Cathedral.
 
-0. **Burning Village** (prologue, where every run starts): the hero's home village, burning under a violet sky. A long, quiet walk east down its cobbled street: no enemies, no pits and no ledges. Exit east to Moonlit Ridge.
-1. **Moonlit Ridge**: solid ground and scattered rock ledges. Walk west to return to the village. Exit east to Ember Hollow.
+0. **Burning Village** (prologue, where every run starts): the hero's home village, burning under a violet sky. A long, quiet walk east down its cobbled street: no enemies, no pits and no ledges. At the east end a swirling vortex opens as you come near: walk into it and it pulls you through to Moonlit Ridge, where it hangs behind you a moment and then shrinks away to nothing (one way: there's no walking back).
+1. **Moonlit Ridge**: solid ground and scattered rock ledges. You arrive here through the village's vortex. Exit east to Ember Hollow.
 2. **Ember Hollow**: lava pits in the ground (falling in costs one flask hit and sends you back to the stage entrance), a high staircase route and more, faster imps. The last pit is a dark shaft instead of lava: drop into it to reach the Molten Core. Exit east to Ashen Woods.
 3. **Molten Core**: a volcanic cavern arena with the **Magma Golem** boss (14 hits). It throws fireballs (swat them with your attack), leaps at you and sends ground shockwaves (jump them), and breathes fire. Below half health it speeds up and throws three fireballs at once. Beating it shatters the golem, flings out its still-pumping **heart** (grab it to fill your flask and unlock the **double jump**: press jump again in mid-air; once the frost settles a card with a looping demo shows how, and stays up until you've tried it) and a wave of frost turns the cavern into ice for good. In fire form you take no damage and touching the golem hurts it.
 4. **Frozen Spire**: the frozen cavern becomes the bottom of a tall ice shaft. Climb about 40 ice ledges (you can jump up through them from below) past winged imps that hover over the ledges, fly between them and swoop at you when you get close. Jump up from the glowing summit to climb back out into Ember Hollow. Its west side opens into the Smoldering Den (the east side, E on the map, is not built yet).
@@ -97,6 +97,7 @@ assets/          all sprite sheets, art, and audio referenced by index.html
 | `wraith_*.png` | Wraith Knight poses (float, raise, slash, glide, hurt, death, remains); all face right |
 | `human_*.png` | The hero's human form after the ending (idle, three run frames, jump, two attacks, hurt, death, dash, and two catch-his-breath frames for the change); all face right |
 | `cathedral_dawn.jpg` | The Ruined Cathedral in plain moonlight, faded in after the ending |
+| `vortex_0.png`–`vortex_5.png` | The village's vortex: 0-3 open it up, 4/5 alternate while it spins |
 | `village_background.jpg` | Burning Village (prologue) backdrop |
 | `plat_village_floor.png` | Burning Village cobbled street: tiled for the ground |
 | `title_poster.jpg` | Title-screen poster (shadow form / human form), with the Enter the Void button low so it doesn't cover the faces |
