@@ -4,7 +4,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#12141c">
 <title>Demonic Flame</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&family=Cormorant+Garamond:ital,wght@1,500&display=swap">
 <style>
   :root{
     --ink:#1b1f2a;
@@ -136,6 +136,29 @@
   .endvideo[hidden]{ display:none; }
   .endvideo video{ width:100%; height:100%; object-fit:contain; }
   .endvideo video[hidden]{ display:none; }
+  /* story lines shown on black between "Enter the Void" and the intro video */
+  .story{ position:absolute; inset:0; z-index:8; background:#050307; overflow:hidden;
+    display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .story[hidden]{ display:none; }
+  .story .glow{ position:absolute; left:50%; top:50%; width:70%; height:60%; transform:translate(-50%,-50%);
+    background:radial-gradient(ellipse at center, rgba(120,60,200,0.28), rgba(60,20,110,0.10) 45%, transparent 70%);
+    animation:storyGlow 5s ease-in-out infinite; pointer-events:none; }
+  @keyframes storyGlow{ 0%,100%{ opacity:0.75; } 50%{ opacity:1; } }
+  .story .line{ position:relative; max-width:78%; margin:0; text-align:center; color:#efe4ff;
+    font:italic 500 clamp(17px, 3.2vw, 34px)/1.35 "Cormorant Garamond", Georgia, serif; letter-spacing:0.3px;
+    text-shadow:0 0 18px rgba(150,90,255,0.55), 0 2px 4px rgba(0,0,0,0.8);
+    opacity:0; transform:translateY(8px); transition:opacity 0.9s ease, transform 0.9s ease; }
+  .story .line.on{ opacity:1; transform:none; }
+  .story .ember{ position:absolute; bottom:-10px; width:4px; height:4px; border-radius:50%;
+    background:#ff9a4a; box-shadow:0 0 8px 2px rgba(255,120,40,0.7); opacity:0;
+    animation:storyEmber linear infinite; pointer-events:none; }
+  @keyframes storyEmber{ 0%{ transform:translate(0,0); opacity:0; } 10%{ opacity:0.9; }
+    80%{ opacity:0.5; } 100%{ transform:translate(var(--dx), -640px); opacity:0; } }
+  .story .skipbtn{ position:absolute; right:3%; bottom:5%; padding:6px 14px; border-radius:16px;
+    border:1px solid rgba(255,200,160,0.45); background:rgba(10,6,8,0.6); color:#f3e2c4;
+    font:bold 12px 'IBM Plex Mono', monospace; letter-spacing:1px; cursor:pointer; }
+  .story .hint{ position:absolute; left:0; right:0; bottom:5.5%; text-align:center; color:rgba(220,200,255,0.4);
+    font:500 11px 'IBM Plex Mono', monospace; letter-spacing:1px; pointer-events:none; }
   .endvideo .skipbtn{ position:absolute; right:3%; bottom:5%; padding:6px 14px; border-radius:16px;
     border:1px solid rgba(255,200,160,0.45); background:rgba(10,6,8,0.6); color:#f3e2c4;
     font:bold 12px 'IBM Plex Mono', monospace; letter-spacing:1px; cursor:pointer; }
@@ -455,6 +478,12 @@
           <p id="overlayText"></p>
           <button class="playbtn" id="overlayBtn">Enter the Void</button>
         </div>
+      </div>
+      <div class="story" id="storyWrap" hidden>
+        <div class="glow"></div>
+        <p class="line" id="storyLine"></p>
+        <div class="hint" id="storyHint">TAP OR PRESS ANY KEY</div>
+        <button class="skipbtn" id="skipStoryBtn" type="button">SKIP &#9654;&#9654;</button>
       </div>
       <div class="endvideo" id="endVideoWrap" hidden>
         <video id="introVideo" src="assets/intro.mp4" playsinline preload="auto" hidden></video>
@@ -3047,6 +3076,7 @@
   // Shared by the keyboard and the on-screen touch buttons.
   function pressKey(code){
     if (paused){ if (code === "KeyP" || code === "Escape") togglePause(); return; }
+    if (storyActive){ storyKey(code); return; }
     if (cutscene){ if (code === "Escape" || code === "Enter" || code === "Space") endEnding(); return; }
     if (transformT >= 0 && gameState === "playing") return;   // hold still while changing
     keys[code] = true;
@@ -3069,6 +3099,11 @@
   }
 
   window.addEventListener("keydown", function(e){
+    if (storyActive){
+      e.preventDefault();
+      if (!e.repeat) storyKey(e.code);
+      return;
+    }
     if (cutscene){
       e.preventDefault();
       if (!e.repeat && (e.code === "Escape" || e.code === "Enter" || e.code === "Space")) endEnding();
@@ -3237,12 +3272,98 @@
   // (?stage=) skip it.
   function enterTheVoid(){
     if (gameState !== "start" || TEST_STAGE !== null){ startGame(); return; }
+    if (storyActive || cutscene) return;
     overlay.hidden = true;
     root.classList.remove("menu");
     SFX.init();
     goFullscreenOnTouch();
-    playVideo(introVideo, startGame);
+    primeVideo(introVideo);
+    showStory(function(){
+      playVideo(introVideo, function(){
+        startGame();
+        // the video paused the title music; bring it back for the game
+        if (musicStarted){ var pr = bgMusic.play(); if (pr && pr.catch) pr.catch(function(){}); }
+        else startMusic();
+      });
+    });
   }
+
+  // Phones only let a video play with sound if play() was first called from
+  // a tap: start it during the "Enter the Void" tap and pause it straight
+  // away, so it can play with sound once the story is over.
+  function primeVideo(v){
+    try {
+      var pr = v.play();
+      if (pr && pr.then) pr.then(function(){ if (activeVideo !== v) v.pause(); }).catch(function(){});
+      else if (activeVideo !== v) v.pause();
+    } catch(e){}
+  }
+
+  // ---------- Opening story ----------
+  // Line by line on black: each fades in, holds, fades out. A tap or key
+  // moves on to the next line; SKIP (or Esc) jumps straight to the video.
+  var STORY = [
+    "Once, he was only a farmer, and she was his whole world.",
+    "Then the Wraith Knight came for the village.",
+    "He took her, and left him cursed: a creature of shadow.",
+    "To break the curse, he must walk into the Void."
+  ];
+  var STORY_FADE = 900, STORY_GAP = 350;
+  var storyWrap = document.getElementById("storyWrap"), storyLine = document.getElementById("storyLine");
+  var storyActive = false, storyIdx = -1, storyTimer = null, storyDone = null, storyBusy = false;
+  (function(){                       // a few embers drifting up behind the text
+    for (var i = 0; i < 14; i++){
+      var e = document.createElement("span");
+      e.className = "ember";
+      e.style.left = (5 + Math.random() * 90) + "%";
+      e.style.setProperty("--dx", (Math.random() * 80 - 40) + "px");
+      e.style.animationDuration = (6 + Math.random() * 6) + "s";
+      e.style.animationDelay = (-Math.random() * 10) + "s";
+      var sz = 2 + Math.random() * 3; e.style.width = e.style.height = sz + "px";
+      storyWrap.insertBefore(e, storyLine);
+    }
+  })();
+  function storyHold(text){ return 1800 + text.length * 32; }   // ms the line stays up
+  function showStory(done){
+    storyActive = true; storyDone = done; storyIdx = -1;
+    releaseAllKeys();
+    storyWrap.hidden = false;
+    root.classList.add("cutscene");
+    storyLine.classList.remove("on");
+    storyTimer = setTimeout(nextStoryLine, 500);
+  }
+  function nextStoryLine(){
+    clearTimeout(storyTimer);
+    storyIdx += 1;
+    if (storyIdx >= STORY.length){ finishStory(); return; }
+    storyLine.textContent = STORY[storyIdx];
+    storyLine.classList.add("on");
+    storyBusy = false;
+    storyTimer = setTimeout(fadeStoryLine, STORY_FADE + storyHold(STORY[storyIdx]));
+  }
+  function fadeStoryLine(){
+    if (!storyActive || storyBusy) return;
+    clearTimeout(storyTimer);
+    storyBusy = true;
+    storyLine.classList.remove("on");
+    storyTimer = setTimeout(nextStoryLine, STORY_FADE + STORY_GAP);
+  }
+  function finishStory(){
+    if (!storyActive) return;
+    clearTimeout(storyTimer);
+    storyActive = false;
+    storyWrap.hidden = true;
+    storyLine.classList.remove("on");
+    root.classList.remove("cutscene");
+    var d = storyDone; storyDone = null;
+    if (d) d();
+  }
+  function storyKey(code){
+    if (code === "Escape") finishStory();
+    else fadeStoryLine();             // any other key: on to the next line
+  }
+  storyWrap.addEventListener("click", function(e){ e.stopPropagation(); fadeStoryLine(); });
+  document.getElementById("skipStoryBtn").addEventListener("click", function(e){ e.stopPropagation(); finishStory(); });
   endVideo.addEventListener("ended", endEnding);
   introVideo.addEventListener("ended", endEnding);
   document.getElementById("skipVideoBtn").addEventListener("click", function(e){ e.stopPropagation(); endEnding(); });
