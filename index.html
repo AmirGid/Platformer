@@ -169,6 +169,17 @@
     backdrop-filter:blur(2px);
   }
   .overlay[hidden]{ display:none; }
+  /* title screen: the poster fills the screen, the button sits low so it
+     doesn't cover the two faces */
+  .overlay.title{
+    background:#07040c url("assets/title_poster.jpg") center / cover no-repeat;
+    backdrop-filter:none;
+    align-items:flex-end;
+    padding-bottom:4%;
+  }
+  .overlay.title .panel{ background:none; border:none; box-shadow:none; padding:0; width:auto; overflow:visible; }
+  .overlay.title .panel::before, .overlay.title .panel::after{ display:none; }
+  .overlay.title h2, .overlay.title p{ display:none; }
   .panel{
     position:relative;
     overflow:hidden;
@@ -438,7 +449,7 @@
       <button class="mutebtn godbtn" id="godBtn" type="button" aria-label="Toggle god mode">GOD</button>
       <button class="mutebtn pausebtn" id="pauseBtn" type="button" aria-label="Pause">&#10074;&#10074;</button>
       <button class="mutebtn mapbtn" id="mapBtn" type="button" aria-label="World map" hidden>&#128506;</button>
-      <div class="overlay" id="overlay">
+      <div class="overlay title" id="overlay">
         <div class="panel">
           <h2 id="overlayTitle">DEMONIC FLAME</h2>
           <p id="overlayText"></p>
@@ -4593,6 +4604,7 @@
     overlayTitle.textContent = title;
     overlayText.textContent = text;
     overlayBtn.textContent = btnLabel;
+    overlay.classList.remove("title");     // the poster is only for the title screen
     overlay.hidden = false;
     root.classList.add("menu");
   }
