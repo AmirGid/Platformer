@@ -824,7 +824,8 @@
     var m = /[?&]stage=([^&]+)/.exec(location.search);
     if (!m) return null;
     var v = decodeURIComponent(m[1]).trim().toLowerCase();
-    if (/^\d+$/.test(v)){ var n = parseInt(v, 10) - 1; return n >= 0 && n < STAGES.length ? n : null; }
+    if (v === "0") return PROLOGUE_STAGE;
+    if (/^\d+$/.test(v)){ var n = parseInt(v, 10) - 1; return n >= 0 && n < PROLOGUE_STAGE ? n : null; }
     for (var i = 0; i < STAGES.length; i++){
       if (STAGES[i].label && STAGES[i].label.toLowerCase() === v) return i;
     }
@@ -912,7 +913,9 @@
    ["cliffs", "assets/cliffs_background.jpg", 1.35, 0.28, "10,6,22"],
    ["cathedral", "assets/cathedral_background.jpg", 1.12, 0.3, "10,6,22"],
    // the same ruins in plain moonlight, faded in once the ending has played
-   ["cathedral_dawn", "assets/cathedral_dawn.jpg", 1.12, 0.22, "8,10,24"]].forEach(function(d){
+   ["cathedral_dawn", "assets/cathedral_dawn.jpg", 1.12, 0.22, "8,10,24"],
+   // the prologue: the hero's home village, burning on the night of the attack
+   ["village", "assets/village_background.jpg", 1.12, 0.16, "10,6,22"]].forEach(function(d){
     var im = new Image();
     var entry = { img: im, ready: false, w: 0, h: 0, dim: d[3], frost: !d[4], dimRGB: d[4] };
     im.onload = function(){
@@ -1077,13 +1080,17 @@
     cliff_hang:  loadArt("assets/plat_cliff_hang.png",  { top: 0.08 }),
     slab_banner: loadArt("assets/plat_slab_banner.png", { top: 0.17 }),
     slab_chain:  loadArt("assets/plat_slab_chain.png",  { top: 0.36 }),
-    slab_plain:  loadArt("assets/plat_slab_plain.png",  { top: 0.26, mid: [0.3, 0.7] })
+    slab_plain:  loadArt("assets/plat_slab_plain.png",  { top: 0.26, mid: [0.3, 0.7] }),
+    // the Burning Village's cobbled street (th = drawn height when tiled as ground)
+    village_floor: loadArt("assets/plat_village_floor.png", { top: 0.3, mid: [0.3, 0.7], th: 230 })
   };
   // which pieces each realm stage builds with: ledges cycle through the list
   var REALM_SETS = {
     graves:    { ledges: ["isle_flat", "isle_stairs"], ground: "cliff_block", wide: 1.25 },
     cliffs:    { ledges: ["cliff_block", "cliff_hang"], ground: "cliff_block", wide: 1.12 },
-    cathedral: { ledges: ["slab_plain", "slab_banner", "slab_chain"], ground: "slab_plain", wide: 1.1 }
+    cathedral: { ledges: ["slab_plain", "slab_banner", "slab_chain"], ground: "slab_plain", wide: 1.1 },
+    // the Burning Village: its own cobbled street with cart wheels and roof tiles
+    village:   { ledges: ["village_floor"], ground: "village_floor", wide: 1.15 }
   };
   // imps and wisps from the burning world look ghostly violet in the realm
   var REALM_FILTER = "hue-rotate(255deg) saturate(0.85) brightness(1.05)";
@@ -1366,10 +1373,11 @@
   //     | climb up
   //   [9] Haunted Graves (you arrive here)
   // Jump limits for laying out platforms: about 140px up, 170px across.
+  var PROLOGUE_STAGE = 12;   // the Burning Village, where every run starts
   var STAGES = [
     {
       name: "Moonlit Ridge",
-      exits: { right: 1 },
+      exits: { left: 12, right: 1 },
       width: 2500,
       ground: [[0, 2500]],
       platforms: [
@@ -1724,6 +1732,22 @@
       platforms: [
         [430, 350, 150], [770, 270, 170], [1110, 350, 150]
       ],
+      enemies: []
+    },
+    {
+      // The prologue (index 12, kept at the end so no other stage moves):
+      // the burning village where it all started. A long, quiet walk east
+      // to Moonlit Ridge: no enemies, no pits, no ledges, just the street.
+      // The game starts here.
+      name: "Burning Village",
+      kicker: "PROLOGUE",
+      prologue: true,
+      backdrop: "village",
+      tiles: "village",             // its cobbled street art instead of the lava rock
+      exits: { right: 0 },
+      width: 3600,
+      ground: [[0, 3600]],
+      platforms: [],
       enemies: []
     }
   ];
@@ -2602,7 +2626,7 @@
     arenaFrozen = false;
     heart = null;
     iceHeart = null;
-    loadStage(0, "left");
+    loadStage(PROLOGUE_STAGE, "left");
     gameState = "playing";
   }
 
@@ -2658,7 +2682,7 @@
     player.entryX = player.x;   // where to put the player back after a lava fall
     camX = Math.max(0, Math.min(WORLD_W - VW, player.x + player.w/2 - VW/2));
     camY = Math.max(stage.topY || 0, Math.min(0, player.y + player.h/2 - VH * 0.6));
-    stageFade = index === 0 && from === "left" && timeAlive === 0 ? 0 : 1;
+    stageFade = index === PROLOGUE_STAGE && from === "left" && timeAlive === 0 ? 0 : 1;
     stageBannerT = STAGE_BANNER_TIME;
   }
 
@@ -2936,6 +2960,7 @@
   // west to east, the golem's room hangs below Ember Hollow, The Chute is a
   // narrow shaft between Cinder Cliffs and the Obsidian Gate.
   var MAP_ROOMS = {
+    "12":   { x: -130, y: 0,  w: 112, h: 56, name: "Village",       color: "#3a2450" },
     "0":    { x: 0,   y: 0,   w: 112, h: 56, name: "Moonlit Ridge", color: "#26385a" },
     "1":    { x: 130, y: 0,   w: 112, h: 56, name: "Ember Hollow",  color: "#6a2616" },
     "4":    { x: 260, y: 0,   w: 112, h: 56, name: "Ashen Woods",   color: "#46464f" },
@@ -2952,7 +2977,7 @@
   };
   // doors between rooms: [roomA, roomB, x, y, vertical]
   var MAP_DOORS = [
-    ["0", "1", 121, 28, false], ["1", "4", 251, 28, false], ["4", "5", 381, 28, false],
+    ["12", "0", -9, 28, false], ["0", "1", 121, 28, false], ["1", "4", 251, 28, false], ["4", "5", 381, 28, false],
     ["1", "boss", 186, 60, true], ["8", "boss", 121, 132, false],
     ["5", "6", 446, 60, true], ["6", "7", 446, 100, true],
     ["9", "10", 816, -172, true], ["10", "11", 881, -222, false]
@@ -3427,6 +3452,7 @@
   var TEST_ENTRY = { 2: "top", 6: "top", 7: "top", 8: "right", 9: "portal", 10: "below" };
   function jumpToStage(i){
     var p = player;
+    if (STAGES[i].prologue){ loadStage(i, "left"); return; }   // where the game starts anyway
     if (i >= 3){ p.canDoubleJump = true; arenaFrozen = true; }      // golem beaten
     if (i >= 4) p.hasMap = true;
     if (i >= 8){                                                   // frost wyrm beaten
@@ -4786,7 +4812,7 @@
   function drawBackground(){
     var backdrop = STAGES[stageIndex].backdrop;
     if (backdrop === "frost"){ drawFrostBackdrop(); return; }
-    if (backdrop === "den" || backdrop === "tundra" || STAGES[stageIndex].realm){ drawFrostBackdrop(backdrop); return; }
+    if (backdrop === "den" || backdrop === "tundra" || backdrop === "village" || STAGES[stageIndex].realm){ drawFrostBackdrop(backdrop); return; }
     if (backdrop && backdrop !== "forest"){
       var bd = BACKDROPS[backdrop];
       if (bd && bd.ready){
@@ -4889,7 +4915,7 @@
   }
   function drawRealmGround(p, a, sx){
     if (!a.ready){ ctx.fillStyle = "#1e1828"; ctx.fillRect(sx, p.y, p.w, p.h); return; }
-    var TH = 120, k = TH / a.naturalHeight, iw = a.naturalWidth;
+    var TH = a.th || 120, k = TH / a.naturalHeight, iw = a.naturalWidth;
     var m0 = a.mid[0] * iw, m1 = a.mid[1] * iw, midW = (m1 - m0) * k;
     var capL = m0 * k, capR = (iw - m1) * k;
     var y = p.y + 3 - a.top * TH;
@@ -4913,7 +4939,7 @@
   }
 
   function drawPlatform(p){
-    var realm = STAGES[stageIndex].realm;
+    var realm = STAGES[stageIndex].realm || STAGES[stageIndex].tiles;
     if (realm){ drawRealmPlatform(p, REALM_SETS[realm]); return; }
     if (STAGES[stageIndex].ice){ drawIcePlatform(p); return; }
     var sx = p.x - camX;
@@ -5113,7 +5139,7 @@
     var icy = STAGES[stageIndex].ice;
     ctx.fillStyle = icy ? "#9fe4ff" : "#ffb57a";
     ctx.font = "12px 'Press Start 2P', monospace";
-    ctx.fillText("STAGE " + (STAGES[stageIndex].label || stageIndex + 1), VW/2, 92);
+    ctx.fillText(STAGES[stageIndex].kicker || "STAGE " + (STAGES[stageIndex].label || stageIndex + 1), VW/2, 92);
     ctx.fillStyle = icy ? "#eafaff" : "#ffe2c4";
     ctx.shadowColor = icy ? "rgba(80,190,255,0.9)" : "rgba(255,90,20,0.9)";
     ctx.shadowBlur = 16;
