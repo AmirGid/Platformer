@@ -135,6 +135,7 @@
   .endvideo{ position:absolute; inset:0; z-index:8; background:#000; display:flex; align-items:center; justify-content:center; }
   .endvideo[hidden]{ display:none; }
   .endvideo video{ width:100%; height:100%; object-fit:contain; }
+  .endvideo video[hidden]{ display:none; }
   .endvideo .skipbtn{ position:absolute; right:3%; bottom:5%; padding:6px 14px; border-radius:16px;
     border:1px solid rgba(255,200,160,0.45); background:rgba(10,6,8,0.6); color:#f3e2c4;
     font:bold 12px 'IBM Plex Mono', monospace; letter-spacing:1px; cursor:pointer; }
@@ -445,7 +446,8 @@
         </div>
       </div>
       <div class="endvideo" id="endVideoWrap" hidden>
-        <video id="endVideo" src="assets/ending.mp4?v=2" playsinline preload="none"></video>
+        <video id="introVideo" src="assets/intro.mp4" playsinline preload="auto" hidden></video>
+        <video id="endVideo" src="assets/ending.mp4?v=2" playsinline preload="none" hidden></video>
         <button class="skipbtn" id="skipVideoBtn" type="button">SKIP &#9654;&#9654;</button>
       </div>
       <div class="overlay" id="pauseMenu" hidden>
@@ -3041,7 +3043,7 @@
       startGame();
     }
     if (gameState === "start" && (code === "ArrowUp" || code === "Enter")) {
-      startGame();
+      enterTheVoid();
     }
     if (code === "KeyX" && gameState === "playing" && !player.superMode && score >= 4) {
       triggerSuperMode();
@@ -3058,7 +3060,7 @@
   window.addEventListener("keydown", function(e){
     if (cutscene){
       e.preventDefault();
-      if (e.code === "Escape" || e.code === "Enter" || e.code === "Space") endEnding();
+      if (!e.repeat && (e.code === "Escape" || e.code === "Enter" || e.code === "Space")) endEnding();
       return;
     }
     if (paused){
@@ -3175,38 +3177,63 @@
   var TRANSFORM_LEN = 170, TRANSFORM_SWAP = 70;   // 0..1 fade to the moonlit cathedral, frames
   var endVideoWrap = document.getElementById("endVideoWrap");
   var endVideo = document.getElementById("endVideo");
-  function playEnding(){
-    if (endingPlayed) return;
-    endingPlayed = true; cutscene = true;
+  // Full-screen cinematics: the intro after "Enter the Void" and the ending
+  // after the Wraith Knight. The game holds still underneath; done() runs
+  // when the video ends or is skipped.
+  var introVideo = document.getElementById("introVideo");
+  var activeVideo = null, videoDone = null;
+  function playVideo(v, done){
+    cutscene = true; activeVideo = v; videoDone = done;
     releaseAllKeys();
     bgMusic.pause();
-    endVideo.muted = SFX.isMuted();
-    endVideo.volume = Math.max(0, Math.min(1, Math.max(musicVol, sfxVol)));
-    endVideo.currentTime = 0;
+    introVideo.hidden = v !== introVideo;
+    endVideo.hidden = v !== endVideo;
+    v.muted = SFX.isMuted();
+    v.volume = Math.max(0, Math.min(1, Math.max(musicVol, sfxVol)));
+    v.currentTime = 0;
     endVideoWrap.hidden = false;
     root.classList.add("cutscene");
-    var pr = endVideo.play();
+    var pr = v.play();
     if (pr && pr.catch) pr.catch(function(){
       // a browser that refuses sound still plays it muted
-      endVideo.muted = true;
-      var p2 = endVideo.play(); if (p2 && p2.catch) p2.catch(function(){ endEnding(); });
+      v.muted = true;
+      var p2 = v.play(); if (p2 && p2.catch) p2.catch(function(){ endEnding(); });
     });
   }
   function endEnding(){
     if (!cutscene) return;
     cutscene = false;
-    endVideo.pause();
+    if (activeVideo) activeVideo.pause();
     endVideoWrap.hidden = true;
     root.classList.remove("cutscene");
     releaseAllKeys();
-    if (musicStarted && gameState === "playing"){ var pr = bgMusic.play(); if (pr && pr.catch) pr.catch(function(){}); }
-    if (gameState === "playing"){
-      SFX.play("ability"); shake = Math.max(shake, 8);   // the portal opens
-      if (!player.human) transformT = 0;                 // and the curse on the hero lifts
-    }
+    var done = videoDone; activeVideo = null; videoDone = null;
+    if (done) done();
     canvas.focus();
   }
+  function playEnding(){
+    if (endingPlayed) return;
+    endingPlayed = true;
+    playVideo(endVideo, function(){
+      if (musicStarted && gameState === "playing"){ var pr = bgMusic.play(); if (pr && pr.catch) pr.catch(function(){}); }
+      if (gameState === "playing"){
+        SFX.play("ability"); shake = Math.max(shake, 8);   // the portal opens
+        if (!player.human) transformT = 0;                 // and the curse on the hero lifts
+      }
+    });
+  }
+  // "Enter the Void" from the title screen plays the intro first. Test links
+  // (?stage=) skip it.
+  function enterTheVoid(){
+    if (gameState !== "start" || TEST_STAGE !== null){ startGame(); return; }
+    overlay.hidden = true;
+    root.classList.remove("menu");
+    SFX.init();
+    goFullscreenOnTouch();
+    playVideo(introVideo, startGame);
+  }
   endVideo.addEventListener("ended", endEnding);
+  introVideo.addEventListener("ended", endEnding);
   document.getElementById("skipVideoBtn").addEventListener("click", function(e){ e.stopPropagation(); endEnding(); });
 
   function setPaused(p){
@@ -3303,7 +3330,7 @@
     startMusic();
     playStartLaugh();
   }
-  overlayBtn.addEventListener("click", startGame);
+  overlayBtn.addEventListener("click", enterTheVoid);
   gameState = "start";
   var TEST_STAGE = readTestStage();
   if (TEST_STAGE !== null) overlayBtn.textContent = "Start in " + (STAGES[TEST_STAGE].label ? "Stage " + STAGES[TEST_STAGE].label : STAGES[TEST_STAGE].name);

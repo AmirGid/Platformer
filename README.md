@@ -96,6 +96,7 @@ assets/          all sprite sheets, art, and audio referenced by index.html
 | `wraith_*.png` | Wraith Knight poses (float, raise, slash, glide, hurt, death, remains); all face right |
 | `human_*.png` | The hero's human form after the ending (idle, three run frames, jump, two attacks, hurt, death, dash, and two catch-his-breath frames for the change); all face right |
 | `cathedral_dawn.jpg` | The Ruined Cathedral in plain moonlight, faded in after the ending |
+| `intro.mp4` | Opening cinematic, played after "Enter the Void" before the game starts (skip with SKIP, Esc, Enter or Space; `?stage=` test links skip it) |
 | `ending.mp4` | Ending cinematic, played once the Wraith Knight finishes dying |
 | `iceheart_0.png`–`iceheart_7.png` | The Frost Wyrm's frozen heart, 8 pulsing frames |
 | `reaper_*.png`, `ghost_*.png` | Scythe wraith (float, raise, slash, strike, hurt, burst) and wailing ghost (float, scream, spit, hurt, burst) enemies of stages H and J |
