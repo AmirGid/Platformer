@@ -1801,6 +1801,12 @@
       music: "village",             // its own track (village_music.mp3)
       exits: {},                    // the east end is a wall: the vortex is the way on
       vortex: { x: 3430, to: 0 },   // swirling portal (centre x) into Moonlit Ridge
+      // the villagers who didn't make it: [art, x, height, flip]
+      props: [
+        ["farmer", 330, 104], ["sickle", 760, 46], ["bones", 1020, 34, true], ["crate", 1280, 62],
+        ["tools", 1700, 96, true], ["coins", 2150, 50], ["apron", 2560, 104, true], ["cart", 2920, 70],
+        ["locket_pile", 3170, 62], ["hair", 3270, 38]
+      ],
       width: 3600,
       ground: [[0, 3600]],
       platforms: [],
@@ -5894,6 +5900,7 @@
     } else {
       allPlatforms.forEach(drawPlatform);
     }
+    drawProps();
     drawSummit();
     drawFinishGate();
     drawMapItem();
@@ -6090,6 +6097,29 @@
       ctx.drawImage(img, -size/2, -size/2, size, size);
     }
     ctx.restore();
+  }
+
+  // Scenery that just sits on the ground (the village's dead): stage.props
+  // = [[art, x, drawn height, flip?]], bottoms resting on the street.
+  var PROP_ART = {};
+  ["farmer", "sickle", "crate", "bones", "apron", "tools", "cart", "coins", "hair", "locket", "locket_pile"].forEach(function(n){
+    PROP_ART[n] = loadArt("assets/skel_" + n + ".png");
+  });
+  function drawProps(){
+    var props = STAGES[stageIndex].props;
+    if (!props) return;
+    for (var i = 0; i < props.length; i++){
+      var pr = props[i], a = PROP_ART[pr[0]];
+      if (!a || !a.ready) continue;
+      var h = pr[2], w = h * a.naturalWidth / a.naturalHeight, sx = pr[1] - camX;
+      if (sx + w/2 < 0 || sx - w/2 > VW) continue;
+      ctx.save();
+      ctx.translate(sx, GROUND_Y + 8);       // sunk a little into the cobbles
+      ctx.filter = "brightness(0.8)";        // the sheet art is lit brighter than the night street
+      if (pr[3]) ctx.scale(-1, 1);
+      ctx.drawImage(a, -w/2, -h, w, h);
+      ctx.restore();
+    }
   }
 
   function drawFinishGate(){
