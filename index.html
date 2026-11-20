@@ -627,7 +627,7 @@
     document.addEventListener(evt, startMusic, { capture: true, once: true });
   });
 
-  // One-shot "evil laugh" stinger on every game start/restart. This is a
+  // One-shot "evil laugh" stinger, heard only after passing through a portal. This is a
   // separate Audio instance from bgMusic, so playing it never touches or
   // interrupts the looping background track already running.
   var sfxLaugh = new Audio("assets/sfx_laugh.mp3");
@@ -3557,7 +3557,6 @@
     canvas.focus();
     goFullscreenOnTouch();
     startMusic();
-    playStartLaugh();
   }
   overlayBtn.addEventListener("click", enterTheVoid);
   gameState = "start";
@@ -3614,7 +3613,7 @@
     if (vortexExit){
       var vb = vortexExit.t;
       vortexExit.t += dt;
-      if (vb < VORTEX_HOLD + VORTEX_CLOSE && vortexExit.t >= VORTEX_HOLD + VORTEX_CLOSE){ SFX.play("swing", 0.6); vortexExit = null; }
+      if (vb < VORTEX_HOLD + VORTEX_CLOSE && vortexExit.t >= VORTEX_HOLD + VORTEX_CLOSE){ SFX.play("swing", 0.6); vortexExit = null; playStartLaugh(); }
     }
 
     var left = keys.ArrowLeft || keys.KeyA;

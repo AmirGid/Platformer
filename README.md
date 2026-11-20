@@ -41,7 +41,7 @@ Stages are defined in the `STAGES` list in `index.html`; add another entry to ad
 
 ## Sound
 
-Background music and the start laugh are recorded files. The main theme (`bgmusic.mp3`) plays on the title screen and in most stages. The Burning Village has its own quieter track (`village_music.mp3`), which hands over to the main theme once you step through the vortex. The Magma Golem has its own track, **Volcanous Fury** (`golem_music.mp3`): it starts as soon as the golem is on screen and hands back to the main theme the moment it dies. The Frost Wyrm does the same with its own track (`wyrm_music.mp3`). The Wraith Knight has his own track, **Final Stand** (`boss_music.mp3`): it takes over the moment the knight comes into view, pauses with the game, and hands back to the main theme when you leave the cathedral or the ending plays. All other sound effects are synthesized in the browser (Web Audio API), so they need no files: sword swings, imp deaths, getting hurt, lava, jumps and the icy double jump, fire form, stage changes, the golem's roar, fireballs, leap, ground slam, flame breath, stone-crack hits, death and explosion, the heart's splat and distance-based heartbeat, the frost wave, the ability chime, the winged imps' screech, game over and the victory fanfare.
+Background music and the evil laugh are recorded files. The laugh plays only after you come through a portal: when the village vortex closes behind you, and when each realm's arrival portal bursts. The main theme (`bgmusic.mp3`) plays on the title screen and in most stages. The Burning Village has its own quieter track (`village_music.mp3`), which hands over to the main theme once you step through the vortex. The Magma Golem has its own track, **Volcanous Fury** (`golem_music.mp3`): it starts as soon as the golem is on screen and hands back to the main theme the moment it dies. The Frost Wyrm does the same with its own track (`wyrm_music.mp3`). The Wraith Knight has his own track, **Final Stand** (`boss_music.mp3`): it takes over the moment the knight comes into view, pauses with the game, and hands back to the main theme when you leave the cathedral or the ending plays. All other sound effects are synthesized in the browser (Web Audio API), so they need no files: sword swings, imp deaths, getting hurt, lava, jumps and the icy double jump, fire form, stage changes, the golem's roar, fireballs, leap, ground slam, flame breath, stone-crack hits, death and explosion, the heart's splat and distance-based heartbeat, the frost wave, the ability chime, the winged imps' screech, game over and the victory fanfare.
 
 The golem's roar and death can use recorded files instead: set their paths in `SFX_FILES` in `index.html` and they replace the synthesized versions once loaded.
 
@@ -113,7 +113,7 @@ assets/          all sprite sheets, art, and audio referenced by index.html
 | `flask_0.png`–`flask_4.png` | Life flask HUD, indexed by hits remaining (0 = empty, 4 = full). After the heart, the taller 5-hit flask is built in code from `flask_0` and `flask_4` |
 | `torch_0.png`–`torch_5.png` | Imp-kill-count HUD torch, indexed by progressive ignition state (score 0 already shows the first ember) |
 | `bgmusic.mp3` | Background music, starts on load |
-| `sfx_laugh.mp3` | Evil-laugh sound effect, played on pressing Start |
+| `sfx_laugh.mp3` | Evil-laugh sound effect, played after passing through a portal |
 
 ## Testing shortcuts (remove before going live)
 
