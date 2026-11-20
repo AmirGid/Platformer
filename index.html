@@ -633,6 +633,17 @@
   var sfxLaugh = new Audio("assets/sfx_laugh.mp3");
   sfxLaugh.volume = 0.85 * sfxVol;
   sfxLaugh.preload = "auto";
+  // Cracking ice, played on every hit to the Frozen Den's breakable wall.
+  var sfxIce = new Audio("assets/sfx_ice_break.mp3");
+  sfxIce.volume = 0.9 * sfxVol;
+  sfxIce.preload = "auto";
+  function playIceBreak(){
+    try {
+      sfxIce.currentTime = 0;
+      var p = sfxIce.play();
+      if (p && p.catch) p.catch(function(){});
+    } catch(e) {}
+  }
   function playStartLaugh(){
     try {
       sfxLaugh.currentTime = 0;
@@ -822,7 +833,7 @@
     function setMuted(m){
       muted = m;
       if (out) out.gain.value = m ? 0 : 0.6 * sfxVol;
-      bgMusic.muted = m; sfxLaugh.muted = m;
+      bgMusic.muted = m; sfxLaugh.muted = m; sfxIce.muted = m;
       EXTRA_TRACKS.forEach(function(a){ a.muted = m; });
       try { localStorage.setItem("df_muted", m ? "1" : "0"); } catch(e){}
     }
@@ -831,6 +842,7 @@
       bgMusic.volume = 0.45 * musicVol;
       setTrackVolumes();
       sfxLaugh.volume = 0.85 * sfxVol;
+      sfxIce.volume = 0.9 * sfxVol;
     }
     return { init: init, play: play, setMuted: setMuted, setVolumes: setVolumes, isMuted: function(){ return muted; } };
   })();
@@ -6169,7 +6181,7 @@
     p.wallHitCd = 20;                                     // one crack per swing
     p.wallHits = Math.min(ICE_WALL.length - 2, p.wallHits + 1);
     var last = p.wallHits === ICE_WALL.length - 2;
-    SFX.play(last ? "explosion" : "slam", last ? 0.8 : 0.5);
+    playIceBreak();
     shake = Math.max(shake, last ? 14 : 7);
     buzz(last ? [60, 40, 120] : [40]);
     hitStop = Math.max(hitStop, 4);
