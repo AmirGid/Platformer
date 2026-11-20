@@ -1672,6 +1672,7 @@
       mapItem: [205, -290],         // the world map scroll: x, top of the ledge it sits on
       potion: [1635, -250],         // max-life flask on the secret ledge
       portal: { x: 1700, y: -250, to: 9 },   // the portal into the shadow realm, beside it
+      leftWall: { edge: 120 },      // an icicled cliff face closes off the west side
       ground: [[0, 1800]],
       platforms: [
         [1500, 370, 150], [1280, 280, 140], [1060, 190, 140], [840, 100, 140],
@@ -3524,7 +3525,7 @@
     var p = player;
     if (STAGES[i].prologue){ loadStage(i, "left"); return; }   // where the game starts anyway
     if (i >= 3){ p.canDoubleJump = true; arenaFrozen = true; }      // golem beaten
-    if (i >= 4) p.hasMap = true;
+    if (i >= 4 && !STAGES[i].mapItem) p.hasMap = true;            // leave the scroll to find in the Frozen Den
     if (i >= 8){                                                   // frost wyrm beaten
       p.canDash = true;
       var w = stageState[7].boss;
@@ -3673,6 +3674,8 @@
       return;
     }
     if (player.x < 0) player.x = 0;
+    var lwall = STAGES[stageIndex].leftWall;
+    if (lwall && player.x < lwall.edge){ player.x = lwall.edge; if (player.vx < 0) player.vx = 0; }
     if (player.x + player.w > WORLD_W) player.x = WORLD_W - player.w;
 
     // Fell down the shaft pit: drop into the stage below.
@@ -5890,6 +5893,7 @@
     ctx.save();
     ctx.translate(0, -Math.round(camY));
     drawPits();
+    drawLeftWall();
     if (freezeT > 0 && stageIndex === 2){
       // while the frost spreads: the fire ledges vanish wherever it has
       // reached, and the ice ledges appear there instead
@@ -6118,6 +6122,23 @@
       if (pr[3]) ctx.scale(-1, 1);
       ctx.drawImage(a, -w/2, -h, w, h);
       ctx.restore();
+    }
+  }
+
+  // A cliff face down the west edge of a stage (the Frozen Den's ice wall):
+  // copies of the cliff art stacked from the ground up past the top of the
+  // stage, so its snowy caps read as ledges. Only its east side shows.
+  var ICE_WALL = loadArt("assets/ice_wall.png");
+  function drawLeftWall(){
+    var lw = STAGES[stageIndex].leftWall, a = ICE_WALL;
+    if (!lw || !a.ready) return;
+    var h = 520, w = h * a.naturalWidth / a.naturalHeight;
+    var right = lw.edge + 30 - camX;           // where the rock face ends (icicles hang past it)
+    var x = right - w * 0.84;                  // the art's rock body ends ~84% across
+    if (x + w < 0) return;
+    var top = (STAGES[stageIndex].topY || 0) - VH;
+    for (var y = GROUND_Y + 40 - h; y + h > top; y -= h - 40){
+      ctx.drawImage(a, x, y, w, h);
     }
   }
 
