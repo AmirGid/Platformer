@@ -1672,7 +1672,8 @@
       mapItem: [205, -290],         // the world map scroll: x, top of the ledge it sits on
       potion: [1635, -250],         // max-life flask on the secret ledge
       portal: { x: 1700, y: -250, to: 9 },   // the portal into the shadow realm, beside it
-      leftWall: { edge: 120 },      // an icicled cliff face closes off the west side
+      leftWall: { edge: 150, breakTo: 13 },  // an icicled cliff face closes off the west side;
+                                    // its lower part cracks under your blade and opens into the Hidden Grotto
       ground: [[0, 1800]],
       platforms: [
         [1500, 370, 150], [1280, 280, 140], [1060, 190, 140], [840, 100, 140],
@@ -1810,6 +1811,19 @@
       ],
       width: 3600,
       ground: [[0, 3600]],
+      platforms: [],
+      enemies: []
+    },
+    {
+      // SECRET: the Hidden Grotto, behind the Frozen Den's ice wall once
+      // you've hacked its lower part away. Empty for now.
+      name: "Hidden Grotto",
+      kicker: "SECRET",
+      exits: { right: 8 },
+      backdrop: "den",
+      ice: true,
+      width: 1400,
+      ground: [[0, 1400]],
       platforms: [],
       enemies: []
     }
@@ -2656,7 +2670,8 @@
       bigFlask:false, flaskGrowT:0, fillShown:1, flaskFrom:0, flaskTo:0, liquidRows:0, flaskGlow:null,
       hasMap:false, visited:{},
       canDash:false, dashes:0, dashT:0, dashCd:0, airDashUsed:false, dashTrail:[],
-      potions:{}, human:false
+      potions:{}, human:false,
+      wallHits:0, wallHitCd:0, wallBreakT:-1, wallGone:false   // the Frozen Den's breakable ice wall
     };
     mapOpen = false;
     itemCard = null;
@@ -3036,6 +3051,7 @@
     "5":    { x: 390, y: 0,   w: 112, h: 56, name: "Cinder Cliffs", color: "#7a2a10" },
     "boss": { x: 130, y: 64,  w: 112, h: 96, name: "Molten Core",   color: "#7a3410" },
     "8":    { x: 0,   y: 104, w: 112, h: 56, name: "Frozen Den",    color: "#2f6080" },
+    "13":   { x: -130, y: 104, w: 112, h: 56, name: "Hidden Grotto", color: "#24506e" },
     "6":    { x: 429, y: 64,  w: 34,  h: 32, name: "",              color: "#3a1a44" },
     "7":    { x: 390, y: 104, w: 112, h: 56, name: "Obsidian Gate", color: "#2f5a7a" },
     // the shadow realm, reached only through the Frozen Den's portal:
@@ -3047,7 +3063,7 @@
   // doors between rooms: [roomA, roomB, x, y, vertical]
   var MAP_DOORS = [
     ["12", "0", -9, 28, false], ["0", "1", 121, 28, false], ["1", "4", 251, 28, false], ["4", "5", 381, 28, false],
-    ["1", "boss", 186, 60, true], ["8", "boss", 121, 132, false],
+    ["1", "boss", 186, 60, true], ["8", "boss", 121, 132, false], ["13", "8", -9, 132, false],
     ["5", "6", 446, 60, true], ["6", "7", 446, 100, true],
     ["9", "10", 816, -172, true], ["10", "11", 881, -222, false]
   ];
@@ -3675,7 +3691,9 @@
     }
     if (player.x < 0) player.x = 0;
     var lwall = STAGES[stageIndex].leftWall;
-    if (lwall && player.x < lwall.edge){ player.x = lwall.edge; if (player.vx < 0) player.vx = 0; }
+    var throughWall = lwall && player.wallGone && player.y + player.h > WALL_GAP_TOP;   // where the lower part was
+    if (throughWall && player.x <= 0 && player.vx < 0){ loadStage(lwall.breakTo, "right"); return; }
+    if (lwall && !throughWall && player.x < lwall.edge){ player.x = lwall.edge; if (player.vx < 0) player.vx = 0; }
     if (player.x + player.w > WORLD_W) player.x = WORLD_W - player.w;
 
     // Fell down the shaft pit: drop into the stage below.
@@ -3741,6 +3759,8 @@
         ? rect(player.x + player.w, player.y + 6, reach, player.h - 12)
         : rect(player.x - reach, player.y + 6, reach, player.h - 12);
     }
+
+    updateIceWall(dt, hitbox);
 
     for (var i=0;i<enemies.length;i++){
       var en = enemies[i];
@@ -6128,17 +6148,70 @@
   // A cliff face down the west edge of a stage (the Frozen Den's ice wall):
   // copies of the cliff art stacked from the ground up past the top of the
   // stage, so its snowy caps read as ledges. Only its east side shows.
-  var ICE_WALL = loadArt("assets/ice_wall.png");
+  // Its lowest section can be broken: it starts already cracked (ice_wall_2)
+  // and each hit swaps in the next, more shattered frame (3, 4, 5); after
+  // the last a short pause, then it
+  // fades away and the way west into the Hidden Grotto is open.
+  var ICE_WALL = [1, 2, 3, 4, 5].map(function(n){ return loadArt("assets/ice_wall_" + n + ".webp"); });
+  var WALL_H = 320, WALL_LOW_Y = GROUND_Y + 40 - WALL_H, WALL_GAP_TOP = WALL_LOW_Y + 40;
+  var WALL_PAUSE = 60, WALL_FADE = 45;
+  function updateIceWall(dt, hitbox){
+    var lw = STAGES[stageIndex].leftWall, p = player;
+    if (!lw || p.wallGone) return;
+    if (p.wallHitCd > 0) p.wallHitCd -= dt;
+    if (p.wallBreakT >= 0){
+      p.wallBreakT += dt;
+      if (p.wallBreakT >= WALL_PAUSE + WALL_FADE){ p.wallGone = true; p.wallBreakT = -1; }
+      return;
+    }
+    var low = rect(0, WALL_GAP_TOP, lw.edge + 10, GROUND_Y - WALL_GAP_TOP);
+    if (!hitbox || p.wallHitCd > 0 || !intersects(hitbox, low)) return;
+    p.wallHitCd = 20;                                     // one crack per swing
+    p.wallHits = Math.min(ICE_WALL.length - 2, p.wallHits + 1);
+    var last = p.wallHits === ICE_WALL.length - 2;
+    SFX.play(last ? "explosion" : "slam", last ? 0.8 : 0.5);
+    shake = Math.max(shake, last ? 14 : 7);
+    buzz(last ? [60, 40, 120] : [40]);
+    hitStop = Math.max(hitStop, 4);
+    var cx = lw.edge, cy = p.y + p.h / 2;
+    for (var i = 0; i < (last ? 40 : 16); i++){
+      var ang = Math.PI * (0.6 - Math.random() * 1.2), sp = 1.5 + Math.random() * (last ? 6 : 4), life = 20 + Math.random() * 24;
+      explosionParticles.push({ x: cx, y: cy + (Math.random() - 0.5) * 40, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 1.5,
+        life: life, maxLife: life, size: 1.5 + Math.random() * 3, color: ["235,248,255", "170,215,240", "110,160,200"][i % 3] });
+    }
+    if (last) p.wallBreakT = 0;
+  }
+  // the section sitting on the breakable one, with its flat bottom feathered
+  // out so it trails off softly once the lower part is gone
+  var iceWallFeather = null;
+  function featheredWall(a){
+    if (iceWallFeather) return iceWallFeather;
+    var c = document.createElement("canvas"); c.width = a.naturalWidth; c.height = a.naturalHeight;
+    var g = c.getContext("2d"); g.drawImage(a, 0, 0);
+    g.globalCompositeOperation = "destination-out";
+    var fade = g.createLinearGradient(0, c.height * 0.72, 0, c.height);
+    fade.addColorStop(0, "rgba(0,0,0,0)"); fade.addColorStop(1, "rgba(0,0,0,1)");
+    g.fillStyle = fade; g.fillRect(0, c.height * 0.72, c.width, c.height * 0.28);
+    return (iceWallFeather = c);
+  }
   function drawLeftWall(){
-    var lw = STAGES[stageIndex].leftWall, a = ICE_WALL;
+    var lw = STAGES[stageIndex].leftWall, a = ICE_WALL[0];
     if (!lw || !a.ready) return;
-    var h = 520, w = h * a.naturalWidth / a.naturalHeight;
+    var h = WALL_H, w = h * a.naturalWidth / a.naturalHeight;
     var right = lw.edge + 30 - camX;           // where the rock face ends (icicles hang past it)
     var x = right - w * 0.84;                  // the art's rock body ends ~84% across
     if (x + w < 0) return;
-    var top = (STAGES[stageIndex].topY || 0) - VH;
-    for (var y = GROUND_Y + 40 - h; y + h > top; y -= h - 40){
-      ctx.drawImage(a, x, y, w, h);
+    var top = (STAGES[stageIndex].topY || 0) - VH, p = player;
+    for (var y = WALL_LOW_Y; y + h > top; y -= h - 40){
+      if (y === WALL_LOW_Y){                   // the breakable lower section
+        if (p.wallGone) continue;
+        var f = ICE_WALL[p.wallHits + 1];      // starts already cracked (ice_wall_2), a hint it can break
+        if (!f.ready) f = a;
+        var alpha = p.wallBreakT > WALL_PAUSE ? Math.max(0, 1 - (p.wallBreakT - WALL_PAUSE) / WALL_FADE) : 1;
+        ctx.save(); ctx.globalAlpha = alpha; ctx.drawImage(f, x, y, w, h); ctx.restore();
+        continue;
+      }
+      ctx.drawImage(y === WALL_LOW_Y - (h - 40) ? featheredWall(a) : a, x, y, w, h);
     }
   }
 
