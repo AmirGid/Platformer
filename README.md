@@ -33,7 +33,7 @@ The route: Ember Hollow, down into the golem's room, beat it, climb the Frozen S
 10. **Haunted Graves** (H): you step out of the portal into a violet graveyard of floating islands over a bottomless void. At the far end the islands climb to a beam of light: jump up out of the top into Shadow Cliffs. Its enemies are **scythe wraiths** (hooded reapers that float over their patch of ground, raise their scythe as a warning, then glide forward and swing) and **wailing ghosts** (they drift between spots, scream, then spit a cursed soul you can swat away); both take two hits. The shadow realm sits far off in the top-right corner of the world map, cut off from the rest of the world.
 11. **Shadow Cliffs** (J): you pop up out of a shaft (drop back down it to return to the graves). Cross broken cliffs over the void, with a high road above, and exit east. Scythe wraiths and wailing ghosts guard the way here too.
 12. **Ruined Cathedral** (K, finish): the **Wraith Knight** (14 hits). It raises its burning sword and lunges (only the sword hurts: jump it or back off, then hit it while it hangs still), gathers lost souls and flings them at you (swat them out of the air), and blinks out to reappear behind you. You can walk through its ghostly body. Once it's destroyed, the ending cinematic plays (skip with the SKIP button, Esc, Enter or Space), then the violet glow lifts (the ruins fade to plain moonlight), the curse on the hero breaks (dark wisps swirl in, a white flash, and he's a young man again) and the portal behind it opens: step through to win.
-- **Hidden Grotto** (secret): the cave behind the Frozen Den's ice wall, reached by breaking the wall's lower part and walking west. Empty for now; walk east to go back.
+- **Hidden Grotto** (secret): behind the Frozen Den's ice wall, reached by breaking the wall's lower part and walking west: a machine works buried in the cave. A boss arena (the boss isn't built yet): a steel deck floor with two low floating decks and a high one between them, all of which you can jump up through from below. Walk east to go back.
 
 **Max-life flasks**: two small corked bottles are hidden on secret ledges. Each adds a hit to your life flask (it stretches taller) and fills it. One sits at the top right of the very first screen and needs the double jump; the other is at the top right of the Frozen Den and needs a double jump off the highest right-hand ledge followed by a mid-air dash. The portal into the shadow realm stands on that same ledge, right beside it.
 
@@ -101,6 +101,9 @@ assets/          all sprite sheets, art, and audio referenced by index.html
 | `vortex_0.png`–`vortex_5.png` | The village's vortex: 0-3 open it up, 4/5 alternate while it spins |
 | `skel_*.png` | Burning Village scenery: ten skeletons and remains placed along the street (`props` in the stage data) |
 | `ice_wall_1.webp`–`ice_wall_5.webp` | Frozen Den west wall: icicled cliff stacked up the stage's left edge (`leftWall` in the stage data). 1 is the intact wall (the upper part); the lower section starts at 2, already cracked, and goes 3, 4, 5 with each hit |
+| `lab_background.jpg` | Hidden Grotto (secret) backdrop: machine works in a cave |
+| `plat_lab_long.png` | Hidden Grotto floor: railed steel deck, tiled for the ground |
+| `plat_lab_deck.png` | Hidden Grotto floating decks |
 | `village_background.jpg` | Burning Village (prologue) backdrop |
 | `plat_village_floor.png` | Burning Village cobbled street: tiled for the ground |
 | `title_poster.jpg` | Title-screen poster (shadow form / human form), with the Enter the Void button low so it doesn't cover the faces |

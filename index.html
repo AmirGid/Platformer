@@ -981,7 +981,9 @@
    // the same ruins in plain moonlight, faded in once the ending has played
    ["cathedral_dawn", "assets/cathedral_dawn.jpg", 1.12, 0.22, "8,10,24"],
    // the prologue: the hero's home village, burning on the night of the attack
-   ["village", "assets/village_background.jpg", 1.12, 0.16, "10,6,22"]].forEach(function(d){
+   ["village", "assets/village_background.jpg", 1.12, 0.16, "10,6,22"],
+   // the Hidden Grotto: a machine works buried in the ice cave
+   ["lab", "assets/lab_background.jpg", 1.12, 0.22, "4,8,14"]].forEach(function(d){
     var im = new Image();
     var entry = { img: im, ready: false, w: 0, h: 0, dim: d[3], frost: !d[4], dimRGB: d[4] };
     im.onload = function(){
@@ -1148,7 +1150,10 @@
     slab_chain:  loadArt("assets/plat_slab_chain.png",  { top: 0.36 }),
     slab_plain:  loadArt("assets/plat_slab_plain.png",  { top: 0.26, mid: [0.3, 0.7] }),
     // the Burning Village's cobbled street (th = drawn height when tiled as ground)
-    village_floor: loadArt("assets/plat_village_floor.png", { top: 0.3, mid: [0.3, 0.7], th: 230 })
+    village_floor: loadArt("assets/plat_village_floor.png", { top: 0.3, mid: [0.3, 0.7], th: 230 }),
+    // the Hidden Grotto's machine decks: a long railed one (ground) and a short one (ledges)
+    lab_long: loadArt("assets/plat_lab_long.png", { top: 0.28, mid: [0.55, 0.72], th: 230 }),
+    lab_deck: loadArt("assets/plat_lab_deck.png", { top: 0.16 })
   };
   // which pieces each realm stage builds with: ledges cycle through the list
   var REALM_SETS = {
@@ -1156,7 +1161,8 @@
     cliffs:    { ledges: ["cliff_block", "cliff_hang"], ground: "cliff_block", wide: 1.12 },
     cathedral: { ledges: ["slab_plain", "slab_banner", "slab_chain"], ground: "slab_plain", wide: 1.1 },
     // the Burning Village: its own cobbled street with cart wheels and roof tiles
-    village:   { ledges: ["village_floor"], ground: "village_floor", wide: 1.15 }
+    village:   { ledges: ["village_floor"], ground: "village_floor", wide: 1.15 },
+    lab:       { ledges: ["lab_deck"], ground: "lab_long", wide: 1.15 }
   };
   // imps and wisps from the burning world look ghostly violet in the realm
   var REALM_FILTER = "hue-rotate(255deg) saturate(0.85) brightness(1.05)";
@@ -1828,15 +1834,21 @@
     },
     {
       // SECRET: the Hidden Grotto, behind the Frozen Den's ice wall once
-      // you've hacked its lower part away. Empty for now.
+      // you've hacked its lower part away: a machine works buried in the
+      // cave. A boss arena (no boss yet): a steel deck floor with three
+      // floating decks to jump between.
       name: "Hidden Grotto",
       kicker: "SECRET",
       exits: { right: 8 },
-      backdrop: "den",
-      ice: true,
+      backdrop: "lab",
+      tiles: "lab",
+      oneWay: true,                 // jump up through the decks from below
       width: 1400,
       ground: [[0, 1400]],
-      platforms: [],
+      platforms: [
+        [170, 350, 260], [970, 350, 260],   // low decks, left and right
+        [530, 240, 340]                     // the high one in the middle
+      ],
       enemies: []
     }
   ];
