@@ -558,11 +558,63 @@
   } catch(e){}
   bgMusic.volume = 0.45 * musicVol;
   bgMusic.preload = "auto";
+  // Other tracks: a stage can name its own (stage.music), and the Wraith
+  // Knight's fight has "Final Stand", which takes over the moment the knight
+  // is on screen and hands back when you leave the cathedral or the ending
+  // plays. curTrack is whichever track should be playing now; bgMusic is
+  // the main theme (and the title screen's).
+  var bossMusic = new Audio("assets/boss_music.mp3");
+  bossMusic.loop = true;
+  bossMusic.preload = "none";              // fetched once the cathedral loads
+  // the Magma Golem's fight: "Volcanous Fury"
+  var golemMusic = new Audio("assets/golem_music.mp3");
+  golemMusic.loop = true;
+  golemMusic.preload = "none";             // fetched once the Molten Core loads
+  // the Frost Wyrm's fight
+  var wyrmMusic = new Audio("assets/wyrm_music.mp3");
+  wyrmMusic.loop = true;
+  wyrmMusic.preload = "none";              // fetched once the Obsidian Gate loads
+  var STAGE_MUSIC = { village: new Audio("assets/village_music.mp3") };   // the Burning Village (prologue)
+  STAGE_MUSIC.village.loop = true;
+  STAGE_MUSIC.village.preload = "auto";
+  var EXTRA_TRACKS = [bossMusic, golemMusic, wyrmMusic, STAGE_MUSIC.village];
+  function setTrackVolumes(){
+    bossMusic.volume = 0.5 * musicVol;
+    golemMusic.volume = 0.5 * musicVol;
+    wyrmMusic.volume = 0.5 * musicVol;
+    STAGE_MUSIC.village.volume = 0.5 * musicVol;
+  }
+  setTrackVolumes();
+  var bossTrack = null, curTrack = bgMusic;   // bossTrack: the fight's track while one is on
+  function music(){ return curTrack; }
+  function resumeMusic(){
+    if (!musicStarted) return;
+    var pr = curTrack.play(); if (pr && pr.catch) pr.catch(function(){});
+  }
+  // switch to the track this stage (or the boss) wants, from the top
+  function syncStageMusic(){
+    var want = bossTrack || STAGE_MUSIC[STAGES[stageIndex].music] || bgMusic;
+    if (want !== curTrack){ curTrack.pause(); curTrack = want; want.currentTime = 0; }
+    if (!paused && !cutscene) resumeMusic();
+  }
+  function setBossMusic(track){
+    if (track === bossTrack) return;
+    bossTrack = track;
+    syncStageMusic();
+  }
+  // which fight track a boss gets
+  function bossTrackFor(b){
+    if (!b) return null;
+    if (b.kind === "wraith") return bossMusic;
+    if (b.kind === "wyrm") return wyrmMusic;
+    if (!b.kind) return golemMusic;          // the Magma Golem
+    return null;
+  }
   var musicStarted = false;
   function startMusic(){
     if (musicStarted) return;
     musicStarted = true;
-    var p = bgMusic.play();
+    var p = curTrack.play();
     if (p && p.catch) p.catch(function(){ musicStarted = false; });
   }
   // Try to play immediately on load. Most browsers block audible autoplay
@@ -771,11 +823,13 @@
       muted = m;
       if (out) out.gain.value = m ? 0 : 0.6 * sfxVol;
       bgMusic.muted = m; sfxLaugh.muted = m;
+      EXTRA_TRACKS.forEach(function(a){ a.muted = m; });
       try { localStorage.setItem("df_muted", m ? "1" : "0"); } catch(e){}
     }
     function setVolumes(){
       if (out) out.gain.value = muted ? 0 : 0.6 * sfxVol;
       bgMusic.volume = 0.45 * musicVol;
+      setTrackVolumes();
       sfxLaugh.volume = 0.85 * sfxVol;
     }
     return { init: init, play: play, setMuted: setMuted, setVolumes: setVolumes, isMuted: function(){ return muted; } };
@@ -1744,6 +1798,7 @@
       prologue: true,
       backdrop: "village",
       tiles: "village",             // its cobbled street art instead of the lava rock
+      music: "village",             // its own track (village_music.mp3)
       exits: {},                    // the east end is a wall: the vortex is the way on
       vortex: { x: 3430, to: 0 },   // swirling portal (centre x) into Moonlit Ridge
       width: 3600,
@@ -2638,10 +2693,14 @@
   function loadStage(index, from){
     if (timeAlive > 0) SFX.play("stage");
     vortexOpenT = -1; vortexEnterT = -1; vortexExit = null;
+    bossTrack = null;
     if (index === 2 && arenaFrozen) index = FROST_STAGE;   // the golem's room stays frozen
     stageIndex = index;
     player.visited[mapKey(index)] = true;
     var stage = STAGES[index];
+    if (stage.boss === "wraith" && bossMusic.preload !== "auto"){ bossMusic.preload = "auto"; bossMusic.load(); }
+    if (stage.boss === true && golemMusic.preload !== "auto"){ golemMusic.preload = "auto"; golemMusic.load(); }
+    if (stage.boss === "wyrm" && wyrmMusic.preload !== "auto"){ wyrmMusic.preload = "auto"; wyrmMusic.load(); }
     WORLD_W = stage.width;
     allPlatforms = buildPlatforms(stage);
     enemies = stageState[index].enemies;
@@ -2686,6 +2745,7 @@
     camY = Math.max(stage.topY || 0, Math.min(0, player.y + player.h/2 - VH * 0.6));
     stageFade = index === PROLOGUE_STAGE && from === "left" && timeAlive === 0 ? 0 : 1;
     stageBannerT = STAGE_BANNER_TIME;
+    if (gameState === "playing") syncStageMusic();   // each stage's own track (startGame handles the first)
   }
 
   // Fiery power-up: once you've defeated 4+ imps, pressing X ignites the
@@ -3258,7 +3318,7 @@
   function playVideo(v, done){
     cutscene = true; activeVideo = v; videoDone = done;
     releaseAllKeys();
-    bgMusic.pause();
+    music().pause();
     introVideo.hidden = v !== introVideo;
     endVideo.hidden = v !== endVideo;
     v.muted = SFX.isMuted();
@@ -3287,8 +3347,10 @@
   function playEnding(){
     if (endingPlayed) return;
     endingPlayed = true;
+    bossTrack = null;                         // the fight is over: back to the main theme afterwards
+    if (curTrack === bossMusic){ bossMusic.pause(); curTrack = bgMusic; }
     playVideo(endVideo, function(){
-      if (musicStarted && gameState === "playing"){ var pr = bgMusic.play(); if (pr && pr.catch) pr.catch(function(){}); }
+      if (gameState === "playing") resumeMusic();
       if (gameState === "playing"){
         SFX.play("ability"); shake = Math.max(shake, 8);   // the portal opens
         if (!player.human) transformT = 0;                 // and the curse on the hero lifts
@@ -3309,7 +3371,7 @@
       playVideo(introVideo, function(){
         startGame();
         // the video paused the title music; bring it back for the game
-        if (musicStarted){ var pr = bgMusic.play(); if (pr && pr.catch) pr.catch(function(){}); }
+        if (musicStarted) resumeMusic();
         else startMusic();
       });
     });
@@ -3407,11 +3469,11 @@
     restartBtn.textContent = "Restart game";
     restartBtn.classList.remove("armed");
     if (p){
-      bgMusic.pause();
+      music().pause();
       SFX.play("swing", 0.5);
       document.getElementById("resumeBtn").focus();
     } else {
-      if (musicStarted){ var pr = bgMusic.play(); if (pr && pr.catch) pr.catch(function(){}); }
+      resumeMusic();
       canvas.focus();
     }
   }
@@ -3482,6 +3544,7 @@
     root.classList.remove("paused");
     resetGame();
     if (TEST_STAGE !== null) jumpToStage(TEST_STAGE);
+    syncStageMusic();                  // the first stage's track (the village's)
     releaseAllKeys();
     overlay.hidden = true;
     root.classList.remove("menu");
@@ -3536,6 +3599,12 @@
     if (transformT >= 0 || transformParts.length) updateTransform(dt);
     if (transformT >= 0 || vortexEnterT >= 0) releaseAllKeys();
     if (STAGES[stageIndex].vortex && updateVortex(dt)) return;
+    // a boss's own track starts as soon as it comes into view; the golem's
+    // and the wyrm's stop when they die (the knight's stops when the ending plays)
+    var btrack = bossTrackFor(boss);
+    if (btrack && !bossTrack && boss.state !== "dead" && !(boss.kind === "wraith" && endingPlayed) &&
+        boss.x > camX - 120 && boss.x - 120 < camX + VW) setBossMusic(btrack);   // any part of it on screen
+    if ((bossTrack === golemMusic || bossTrack === wyrmMusic) && (!boss || boss.state === "dead")) setBossMusic(null);
     if (vortexExit){
       var vb = vortexExit.t;
       vortexExit.t += dt;
@@ -5968,7 +6037,7 @@
     var v = STAGES[stageIndex].vortex, pcx = player.x + player.w/2;
     if (vortexOpenT < 0 && pcx > v.x - 620){ vortexOpenT = 0; SFX.play("ability", 0.6); }
     if (vortexOpenT >= 0) vortexOpenT += dt;
-    if (vortexEnterT < 0 && vortexOpenT > VORTEX_OPEN && Math.abs(pcx - v.x) < 34){
+    if (vortexEnterT < 0 && vortexOpenT > VORTEX_OPEN && pcx > v.x - 34){   // also catches anyone who ran past before it opened
       vortexEnterT = 0; SFX.play("ability"); buzz(50); shake = Math.max(shake, 6);
     }
     if (vortexEnterT >= 0){
