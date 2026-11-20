@@ -982,7 +982,7 @@
    ["cathedral_dawn", "assets/cathedral_dawn.jpg", 1.12, 0.22, "8,10,24"],
    // the prologue: the hero's home village, burning on the night of the attack
    ["village", "assets/village_background.jpg", 1.12, 0.16, "10,6,22"],
-   // the Hidden Grotto: a machine works buried in the ice cave
+   // Itay's Secret Lab: a machine works buried in the ice cave
    ["lab", "assets/lab_background.jpg", 1.12, 0.22, "4,8,14"]].forEach(function(d){
     var im = new Image();
     var entry = { img: im, ready: false, w: 0, h: 0, dim: d[3], frost: !d[4], dimRGB: d[4] };
@@ -1151,7 +1151,7 @@
     slab_plain:  loadArt("assets/plat_slab_plain.png",  { top: 0.26, mid: [0.3, 0.7] }),
     // the Burning Village's cobbled street (th = drawn height when tiled as ground)
     village_floor: loadArt("assets/plat_village_floor.png", { top: 0.3, mid: [0.3, 0.7], th: 230 }),
-    // the Hidden Grotto's machine decks: a long railed one (ground) and a short one (ledges)
+    // Itay's Secret Lab's machine decks: a long railed one (ground) and a short one (ledges)
     lab_long: loadArt("assets/plat_lab_long.png", { top: 0.28, mid: [0.55, 0.72], th: 230 }),
     lab_deck: loadArt("assets/plat_lab_deck.png", { top: 0.16 })
   };
@@ -1691,7 +1691,7 @@
       potion: [1635, -250],         // max-life flask on the secret ledge
       portal: { x: 1700, y: -250, to: 9 },   // the portal into the shadow realm, beside it
       leftWall: { edge: 150, breakTo: 13 },  // an icicled cliff face closes off the west side;
-                                    // its lower part cracks under your blade and opens into the Hidden Grotto
+                                    // its lower part cracks under your blade and opens into Itay's Secret Lab
       ground: [[0, 1800]],
       platforms: [
         [1500, 370, 150], [1280, 280, 140], [1060, 190, 140], [840, 100, 140],
@@ -1833,11 +1833,11 @@
       enemies: []
     },
     {
-      // SECRET: the Hidden Grotto, behind the Frozen Den's ice wall once
+      // SECRET: Itay's Secret Lab, behind the Frozen Den's ice wall once
       // you've hacked its lower part away: a machine works buried in the
       // cave. A boss arena (no boss yet): a steel deck floor with three
       // floating decks to jump between.
-      name: "Hidden Grotto",
+      name: "Itay's Secret Lab",
       kicker: "SECRET",
       exits: { right: 8 },
       backdrop: "lab",
@@ -3075,7 +3075,7 @@
     "5":    { x: 390, y: 0,   w: 112, h: 56, name: "Cinder Cliffs", color: "#7a2a10" },
     "boss": { x: 130, y: 64,  w: 112, h: 96, name: "Molten Core",   color: "#7a3410" },
     "8":    { x: 0,   y: 104, w: 112, h: 56, name: "Frozen Den",    color: "#2f6080" },
-    "13":   { x: -130, y: 104, w: 112, h: 56, name: "Hidden Grotto", color: "#24506e" },
+    "13":   { x: -130, y: 104, w: 112, h: 56, name: "Itay's Secret Lab", color: "#24506e" },
     "6":    { x: 429, y: 64,  w: 34,  h: 32, name: "",              color: "#3a1a44" },
     "7":    { x: 390, y: 104, w: 112, h: 56, name: "Obsidian Gate", color: "#2f5a7a" },
     // the shadow realm, reached only through the Frozen Den's portal:
@@ -3167,7 +3167,15 @@
       if (name){
         ctx.fillStyle = "rgba(255,244,220,0.9)";
         ctx.font = nameFont + "px 'Press Start 2P', monospace";
-        ctx.fillText(name.toUpperCase(), rx + rw/2, ry + 6 + nameFont);
+        var label = name.toUpperCase();
+        if (ctx.measureText(label).width > rw - 8 && label.indexOf(" ") > 0){
+          // too wide for its box: break after the first word ("ITAY'S" / "SECRET LAB")
+          var cut = label.indexOf(" ");
+          ctx.fillText(label.slice(0, cut), rx + rw/2, ry + 6 + nameFont);
+          ctx.fillText(label.slice(cut + 1), rx + rw/2, ry + 10 + nameFont * 2);
+        } else {
+          ctx.fillText(label, rx + rw/2, ry + 6 + nameFont);
+        }
       }
     });
 
@@ -6175,7 +6183,7 @@
   // Its lowest section can be broken: it starts already cracked (ice_wall_2)
   // and each hit swaps in the next, more shattered frame (3, 4, 5); after
   // the last a short pause, then it
-  // fades away and the way west into the Hidden Grotto is open.
+  // fades away and the way west into Itay's Secret Lab is open.
   var ICE_WALL = [1, 2, 3, 4, 5].map(function(n){ return loadArt("assets/ice_wall_" + n + ".webp"); });
   var WALL_H = 320, WALL_LOW_Y = GROUND_Y + 40 - WALL_H, WALL_GAP_TOP = WALL_LOW_Y + 40;
   var WALL_PAUSE = 60, WALL_FADE = 45;
