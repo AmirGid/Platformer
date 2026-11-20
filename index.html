@@ -4197,7 +4197,7 @@
     if (!b) return;
     if (b.kind === "wyrm"){ drawWyrm(b); return; }
     if (b.kind === "wraith"){ drawWraith(b); return; }
-    if (b.kind === "itay"){ drawItay(b); return; }
+    if (b.kind === "itay"){ drawItay(b); if (b.heart) drawTechHeart(b.heart); return; }
     var img = BOSS_SPRITES[bossPose(b)];
     var sx = b.x - camX;
     ctx.save();
@@ -4340,6 +4340,12 @@
    "blast0", "blast1", "blast2", "blast3", "blast4",
    "jet0", "jet1", "jet2", "jet3", "jet4"].forEach(function(n){ ITAY_SPRITES[n] = loadArt("assets/itay_" + n + ".webp"); });
   var labBolts = [], labWaves = [];
+  // his heart: a clockwork heart that drops when he teleports out, rolls
+  // across the floor and settles there beating (frames from the user's sheet)
+  var TECH_HEART = { beat: [], roll: [] };
+  [0, 1, 2, 3, 4].forEach(function(i){ TECH_HEART.beat.push(loadArt("assets/itay_heart_beat" + i + ".webp")); });
+  [0, 1, 2, 3, 4, 5].forEach(function(i){ TECH_HEART.roll.push(loadArt("assets/itay_heart_roll" + i + ".webp")); });
+  var TECH_HEART_S = 0.42;
 
   function makeItay(stage){
     return {
@@ -4404,12 +4410,15 @@
       var before = b.dead_t;
       b.dead_t += dt;
       if (b.dead_t < 100 && Math.random() < 0.35 * dt) itaySparks(b.x + (Math.random() - 0.5) * 50, b.y - 30 - Math.random() * 80, 4, 3);
-      if (before < 100 && b.dead_t >= 100){        // teleports out in a flash
+      if (before < 100 && b.dead_t >= 100){        // teleports out in a flash, leaving his heart behind
         explosionFlash = { x: b.x, y: b.y - 70, t: 0, maxT: 30 };
+        var hdir = b.x > WORLD_W / 2 ? -1 : 1;
+        b.heart = { x: b.x, y: b.y - 90, vx: hdir * 3.6, vy: -9, state: "fly", t: 0, roll: 0, bounced: false };
         itaySparks(b.x, b.y - 70, 50, 6, ["255,255,255", "140,240,255", "60,170,255"]);
         SFX.play("freeze"); shake = 10;
       }
       b.alpha = b.dead_t < 100 ? 1 : Math.max(0, 1 - (b.dead_t - 100) / 12);
+      if (b.heart) updateTechHeart(b, dt);
       return;
     }
     var mul = b.phase2 ? 1.35 : 1;
@@ -4641,6 +4650,91 @@
         ctx.beginPath(); ctx.moveTo(cx + Math.cos(a0) * R * 0.5, cy + Math.sin(a0) * R * 0.5);
         ctx.lineTo(cx + Math.cos(a0) * R * 0.98, cy + Math.sin(a0) * R * 0.98); ctx.stroke();
       }
+      ctx.restore();
+    }
+  }
+
+  function techHeartSparks(h, n, power){
+    for (var i = 0; i < n; i++){
+      var ang = -Math.PI * Math.random(), sp = 1 + Math.random() * power, life = 20 + Math.random() * 25;
+      explosionParticles.push({ x: h.x, y: h.state === "fly" ? h.y : GROUND_Y - 24, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+        life: life, maxLife: life, size: 1.5 + Math.random() * 2.5, color: ["120,230,255", "255,170,70", "220,250,255"][i % 3] });
+    }
+  }
+  function updateTechHeart(b, dt){
+    var h = b.heart;
+    h.t += dt;
+    if (h.state === "taken"){ if (h.t > 40) b.heart = null; return; }
+    if (h.state === "fly" || h.state === "roll"){
+      h.vy += 0.45 * dt;
+      h.x += h.vx * dt; h.y += h.vy * dt;
+      h.roll += Math.abs(h.vx) * 0.06 * dt;                    // rolling frames keep pace with its speed
+      if (h.x < 50 || h.x > WORLD_W - 50){ h.vx = -h.vx; h.x = Math.max(50, Math.min(WORLD_W - 50, h.x)); }
+      if (h.y >= GROUND_Y - 40){
+        h.y = GROUND_Y - 40;
+        if (!h.bounced && h.vy > 3){                           // one clanking bounce, then it rolls
+          h.bounced = true; h.vy = -h.vy * 0.4; h.state = "roll";
+          SFX.play("slam", near(h.x, GROUND_Y) * 0.5); shake = Math.max(shake, 5);
+          techHeartSparks(h, 12, 3);
+        } else {
+          h.vy = 0; h.state = "roll";
+          h.vx *= Math.pow(0.975, dt);
+          if (Math.abs(h.vx) < 0.35){ h.state = "rest"; h.t = 0; h.vx = 0; }
+        }
+      }
+    } else if (h.state === "rest"){
+      // lub-dub: a thump at the start of each beat, louder up close
+      var ph0 = (h.t - dt) % 60, ph1 = h.t % 60;
+      if (ph1 < ph0) SFX.play("beat", near(h.x, GROUND_Y - 24));
+    }
+    if (h.state !== "fly" && gameState === "playing" && intersects(player, rect(h.x - 26, GROUND_Y - 58, 52, 58))){
+      h.state = "taken"; h.t = 0;
+      SFX.play("heal");
+      player.hp = player.maxHp;                                 // like the golem's and the wyrm's: a full flask
+      player.invuln = Math.max(player.invuln, 30);
+      shake = Math.max(shake, 8);
+      techHeartSparks(h, 40, 6);
+    }
+  }
+  function drawTechHeart(h){
+    var sx = h.x - camX;
+    if (sx < -80 || sx > VW + 80) return;
+    var img, s = 1;
+    if (h.state === "fly" || h.state === "roll") img = TECH_HEART.roll[Math.floor(h.roll) % TECH_HEART.roll.length];
+    else {
+      var ph = h.state === "rest" ? h.t % 60 : 0;
+      // five-frame beat at the start of each cycle, then rest on the first frame
+      img = TECH_HEART.beat[ph < 25 ? Math.floor(ph / 5) : 0];
+      if (h.state === "rest" && ph < 10) s = 1 + 0.06 * Math.sin(ph / 10 * Math.PI);
+    }
+    var cy = h.state === "fly" || h.state === "roll" ? h.y : GROUND_Y - 38;
+    ctx.save();
+    // electric glow, brightest on the beat
+    var glow = h.state === "rest" ? 0.35 + 0.35 * Math.max(0, 1 - (h.t % 60) / 20) : h.state === "taken" ? 0 : 0.3;
+    if (glow > 0){
+      var g = ctx.createRadialGradient(sx, cy, 4, sx, cy, 75);
+      g.addColorStop(0, "rgba(110,220,255," + glow.toFixed(2) + ")");
+      g.addColorStop(1, "rgba(60,150,255,0)");
+      ctx.fillStyle = g; ctx.fillRect(sx - 75, cy - 75, 150, 150);
+    }
+    if (img && img.ready){
+      var S = TECH_HEART_S * s * (h.state === "taken" ? 1 + h.t / 40 * 0.6 : 1);
+      var w = img.naturalWidth * S, hh = img.naturalHeight * S;
+      if (h.state === "taken") ctx.globalAlpha = Math.max(0, 1 - h.t / 40);
+      // sits on the floor; centred while it tumbles
+      var top = h.state === "fly" || h.state === "roll" ? cy - hh / 2 : GROUND_Y + 4 - hh;
+      ctx.drawImage(img, sx - w / 2, top, w, hh);
+    }
+    ctx.restore();
+    if (h.state === "taken"){
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, 1 - h.t / 40);
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#d4f6ff";
+      ctx.shadowColor = "rgba(60,190,255,0.9)";
+      ctx.shadowBlur = 10;
+      ctx.font = "12px 'Press Start 2P', monospace";
+      ctx.fillText("FULL HEALTH", sx, GROUND_Y - 90 - h.t * 0.8);
       ctx.restore();
     }
   }
