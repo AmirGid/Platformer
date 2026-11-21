@@ -574,14 +574,19 @@
   var wyrmMusic = new Audio("assets/wyrm_music.mp3");
   wyrmMusic.loop = true;
   wyrmMusic.preload = "none";              // fetched once the Obsidian Gate loads
+  // Itay's fight in the secret lab: "Machine Pulse"
+  var itayMusic = new Audio("assets/itay_music.mp3");
+  itayMusic.loop = true;
+  itayMusic.preload = "none";              // fetched once the lab loads
   var STAGE_MUSIC = { village: new Audio("assets/village_music.mp3") };   // the Burning Village (prologue)
   STAGE_MUSIC.village.loop = true;
   STAGE_MUSIC.village.preload = "auto";
-  var EXTRA_TRACKS = [bossMusic, golemMusic, wyrmMusic, STAGE_MUSIC.village];
+  var EXTRA_TRACKS = [bossMusic, golemMusic, wyrmMusic, itayMusic, STAGE_MUSIC.village];
   function setTrackVolumes(){
     bossMusic.volume = 0.5 * musicVol;
     golemMusic.volume = 0.5 * musicVol;
     wyrmMusic.volume = 0.5 * musicVol;
+    itayMusic.volume = 0.5 * musicVol;
     STAGE_MUSIC.village.volume = 0.5 * musicVol;
   }
   setTrackVolumes();
@@ -607,7 +612,7 @@
     if (!b) return null;
     if (b.kind === "wraith") return bossMusic;
     if (b.kind === "wyrm") return wyrmMusic;
-    if (b.kind === "itay") return bossMusic;     // Final Stand: the secret boss gets the big track too
+    if (b.kind === "itay") return itayMusic;
     if (!b.kind) return golemMusic;          // the Magma Golem
     return null;
   }
@@ -2714,7 +2719,8 @@
       hasMap:false, visited:{},
       canDash:false, dashes:0, dashT:0, dashCd:0, airDashUsed:false, dashTrail:[],
       potions:{}, human:false,
-      wallHits:0, wallHitCd:0, wallBreakT:-1, wallGone:false   // the Frozen Den's breakable ice wall
+      wallHits:0, wallHitCd:0, wallBreakT:-1, wallGone:false,  // the Frozen Den's breakable ice wall
+      hasForceField:false, ffKills:0, ffT:0                    // Itay's heart: a force field every third kill
     };
     mapOpen = false;
     itemCard = null;
@@ -2764,7 +2770,8 @@
     player.visited[mapKey(index)] = true;
     var stage = STAGES[index];
     labBolts = []; labWaves = [];
-    if ((stage.boss === "wraith" || stage.boss === "itay") && bossMusic.preload !== "auto"){ bossMusic.preload = "auto"; bossMusic.load(); }
+    if (stage.boss === "itay" && itayMusic.preload !== "auto"){ itayMusic.preload = "auto"; itayMusic.load(); }
+    if (stage.boss === "wraith" && bossMusic.preload !== "auto"){ bossMusic.preload = "auto"; bossMusic.load(); }
     if (stage.boss === true && golemMusic.preload !== "auto"){ golemMusic.preload = "auto"; golemMusic.load(); }
     if (stage.boss === "wyrm" && wyrmMusic.preload !== "auto"){ wyrmMusic.preload = "auto"; wyrmMusic.load(); }
     WORLD_W = stage.width;
@@ -3818,6 +3825,7 @@
       var en = enemies[i];
       if (!en.alive){
         en.dead_t += dt;
+        if (en.shockT > 0) en.shockT -= dt;
         if (en.flyer){ en.vy += 0.5 * dt; en.cy += en.vy * dt; en.y = en.cy - en.h/2; }   // tumbles out of the air
         continue;
       }
@@ -3841,6 +3849,8 @@
       }
 
       if (en.hitFlash > 0) en.hitFlash -= dt;
+      if (en.shockT > 0) en.shockT -= dt;
+      if (!(en.shockT > 0) && fieldTouches(en)){ shockEnemy(en); if (!en.alive) continue; }
 
       if (en.hp > 1 && hitbox && intersects(hitbox, en)){
         // first hit only cracks a golem: it staggers back
@@ -3856,6 +3866,7 @@
         en.alive = false;
         en.hitFlash = 10;
         score += 1;
+        noteKill();
         shake = 8;
         SFX.play("impDie");
         hitSparks(en.x + en.w/2, en.y + en.h/2, player.facing, 16);
@@ -3866,6 +3877,7 @@
         en.alive = false;
         en.hitFlash = 10;
         score += 1;
+        noteKill();
         shake = 6;
         SFX.play("impDie");
         hitSparks(en.x + en.w/2, en.y + en.h/2, 0, 10);
@@ -3887,6 +3899,8 @@
     }
 
     if (boss && gameState === "playing") updateBoss(dt, hitbox);
+    updateForceField(dt);
+    if (gameState === "playing") shockBoss(dt);
     if (ghostBolts.length) updateGhostBolts(dt, hitbox);
     updateHeart(dt);
     updateIceHeart(dt);
@@ -4329,6 +4343,154 @@
     ctx.restore();
   }
 
+  // ---------- Force field (from Itay's heart) ----------
+  // Once you've taken Itay's heart, every third kill throws a crackling
+  // violet force field around you for 5 seconds. Anything that touches it
+  // gets a purple shock: one hit, then a second's grace before it can be
+  // shocked again, flickering purple and white the whole time.
+  var FIELD_T = 300, FIELD_R = 70, SHOCK_T = 60;
+  var FIELD_ART = loadArt("assets/force_field.jpg");      // the ring's glow on black, drawn additively
+  var zaps = [];                                          // lightning from you to whatever got shocked
+  function fieldOn(){ return player && player.ffT > 0; }
+  function fieldCentre(){ return { x: player.x + player.w / 2, y: player.y + player.h / 2 }; }
+  // does a box touch the field's circle?
+  function fieldTouches(box){
+    if (!fieldOn()) return false;
+    var c = fieldCentre();
+    var nx = Math.max(box.x, Math.min(c.x, box.x + box.w)), ny = Math.max(box.y, Math.min(c.y, box.y + box.h));
+    return (nx - c.x) * (nx - c.x) + (ny - c.y) * (ny - c.y) < FIELD_R * FIELD_R;
+  }
+  function noteKill(){
+    if (!player.hasForceField) return;
+    player.ffKills = (player.ffKills || 0) + 1;
+    if (player.ffKills % 3 === 0){
+      var was = player.ffT > 0;
+      player.ffT = FIELD_T;
+      if (!was){ SFX.play("ability", 0.8); shake = Math.max(shake, 5); buzz(40); }
+    }
+  }
+  function shockSparks(x, y, n){
+    for (var i = 0; i < n; i++){
+      var ang = Math.random() * Math.PI * 2, sp = 1.5 + Math.random() * 4, life = 14 + Math.random() * 18;
+      explosionParticles.push({ x: x, y: y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 1,
+        life: life, maxLife: life, size: 1.4 + Math.random() * 2.2, color: ["255,255,255", "210,150,255", "150,80,255"][i % 3] });
+    }
+  }
+  function zapTo(x, y){
+    var c = fieldCentre();
+    zaps.push({ x0: c.x, y0: c.y, x1: x, y1: y, t: 0 });
+    SFX.play("freeze", 0.6);
+    shockSparks(x, y, 14);
+  }
+  function shockEnemy(en){
+    en.shockT = SHOCK_T;
+    zapTo(en.x + en.w / 2, en.y + en.h / 2);
+    if (en.hp !== undefined && en.hp > 1){                 // the frost golems take two hits
+      en.hp -= 1; en.hurtT = 26; en.hitFlash = 10; en.atkT = 0;
+      en.x += (en.x + en.w/2 < player.x + player.w/2 ? -1 : 1) * 14;
+      return;
+    }
+    en.alive = false; en.hitFlash = 10;
+    score += 1;
+    SFX.play("impDie");
+    noteKill();
+  }
+  // bosses get shocked too: one hit through their own damage code
+  function shockBoss(dt){
+    var b = boss;
+    if (!b || b.hp === undefined) return;
+    if (b.shockT > 0) b.shockT -= dt;
+    if (!fieldOn() || b.shockT > 0 || b.state === "waiting" || b.state === "intro" || b.state === "dead" || b.hp <= 0) return;
+    if (b.alpha !== undefined && b.alpha < 0.5) return;
+    var box = b.kind === "wyrm" ? wyrmBox(b) : b.kind === "wraith" ? wraithBox(b) : b.kind === "itay" ? itayBox(b) : bossBox(b);
+    if (!fieldTouches(box)) return;
+    b.shockT = SHOCK_T;
+    zapTo(box.x + box.w / 2, box.y + box.h / 2);
+    if (b.kind === "wyrm") damageWyrm(b, 22);
+    else if (b.kind === "wraith") damageWraith(b, 22);
+    else if (b.kind === "itay") damageItay(b);
+    else damageBoss(b, 1, 22);
+  }
+  function updateForceField(dt){
+    if (player.ffT > 0) player.ffT = Math.max(0, player.ffT - dt);
+    for (var i = zaps.length - 1; i >= 0; i--){ zaps[i].t += dt; if (zaps[i].t > 12) zaps.splice(i, 1); }
+  }
+  // a shocked unit flickers purple and white for its second of grace
+  function shockFilter(u){
+    if (!u || !(u.shockT > 0)) return "";
+    return Math.floor(u.shockT / 4) % 2 ? "sepia(1) hue-rotate(225deg) saturate(6) brightness(1.25)" : "brightness(2.8) saturate(0)";
+  }
+  // canvas filter that the sprite code can't override: whatever filter a
+  // draw routine sets gets the shock flicker added on the end
+  var forcedFilter = "";
+  (function(){
+    var desc = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, "filter");
+    if (!desc || !desc.set) return;
+    Object.defineProperty(ctx, "filter", {
+      configurable: true,
+      get: function(){ return desc.get.call(ctx); },
+      set: function(v){ desc.set.call(ctx, forcedFilter ? ((v && v !== "none" ? v + " " : "") + forcedFilter) : v); }
+    });
+  })();
+  function drawShocked(u, draw){
+    var f = shockFilter(u);
+    if (!f){ draw(u); return; }
+    forcedFilter = f; ctx.filter = "none";
+    draw(u);
+    forcedFilter = ""; ctx.filter = "none";
+  }
+  function drawForceField(){
+    if (!fieldOn()) return;
+    var c = fieldCentre(), sx = c.x - camX, t = timeAlive;
+    var life = player.ffT;
+    var a = Math.min(1, (FIELD_T - life) / 10, life / 30);          // pops in, fades at the end
+    if (life < 60 && Math.floor(life / 5) % 2) a *= 0.45;          // blinks in its last second
+    var R = FIELD_R * (1.18 + 0.04 * Math.sin(t * 0.25));
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = a;
+    if (FIELD_ART.ready){
+      ctx.translate(sx, c.y); ctx.rotate(t * 0.02);
+      ctx.drawImage(FIELD_ART, -R * 1.25, -R * 1.25, R * 2.5, R * 2.5);   // the ring sits at ~80% of the art's half-width
+    } else {
+      ctx.strokeStyle = "rgba(190,130,255,0.9)"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(sx, c.y, FIELD_R, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function drawZaps(){
+    for (var i = 0; i < zaps.length; i++){
+      var z = zaps[i], a = 1 - z.t / 12;
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      for (var pass = 0; pass < 2; pass++){
+        ctx.strokeStyle = pass ? "rgba(255,255,255," + a.toFixed(2) + ")" : "rgba(170,90,255," + (0.8 * a).toFixed(2) + ")";
+        ctx.lineWidth = pass ? 1.5 : 5;
+        ctx.beginPath(); ctx.moveTo(z.x0 - camX, z.y0);
+        for (var k = 1; k < 6; k++){
+          var f = k / 6, j = (Math.random() - 0.5) * 18;
+          ctx.lineTo(z.x0 + (z.x1 - z.x0) * f - camX + j, z.y0 + (z.y1 - z.y0) * f + j);
+        }
+        ctx.lineTo(z.x1 - camX, z.y1); ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+  // HUD: three pips under the flask, one per kill toward the next field
+  var hudPipAt = { x: 58, y: 222 };                       // just under the flask's box (set by drawHUD)
+  function drawFieldPips(){
+    if (!player || !player.hasForceField) return;
+    var n = fieldOn() ? 3 : (player.ffKills || 0) % 3;
+    ctx.save();
+    for (var i = 0; i < 3; i++){
+      var x = hudPipAt.x + (i - 1) * 16, y = hudPipAt.y, on = i < n;
+      ctx.fillStyle = on ? (fieldOn() && Math.floor(timeAlive / 6) % 2 ? "#ffffff" : "#b77bff") : "rgba(120,90,170,0.35)";
+      ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "rgba(220,190,255,0.7)"; ctx.lineWidth = 1; ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   // ---------- Boss: Itay (Itay's Secret Lab) ----------
   // The secret boss: a kid in a powered battle suit. The hardest fight in the
   // game: lots of health, almost no rest between attacks, and a second phase
@@ -4723,6 +4885,7 @@
       h.state = "taken"; h.t = 0;
       SFX.play("heal");
       player.hp = player.maxHp;                                 // like the golem's and the wyrm's: a full flask
+      player.hasForceField = true;                              // ...and the force field, every third kill
       player.invuln = Math.max(player.invuln, 30);
       shake = Math.max(shake, 8);
       techHeartSparks(h, 40, 6);
@@ -4766,7 +4929,11 @@
       ctx.shadowColor = "rgba(60,190,255,0.9)";
       ctx.shadowBlur = 10;
       ctx.font = "12px 'Press Start 2P', monospace";
-      ctx.fillText("FULL HEALTH", sx, GROUND_Y - 90 - h.t * 0.8);
+      ctx.fillText("FULL HEALTH", sx, GROUND_Y - 110 - h.t * 0.8);
+      ctx.fillStyle = "#e6c8ff"; ctx.shadowColor = "rgba(170,90,255,0.9)";
+      ctx.fillText("FORCE FIELD", sx, GROUND_Y - 88 - h.t * 0.8);
+      ctx.font = "8px 'Press Start 2P', monospace";
+      ctx.fillText("EVERY 3RD KILL", sx, GROUND_Y - 72 - h.t * 0.8);
       ctx.restore();
     }
   }
@@ -6405,6 +6572,7 @@
       ctx.textAlign = "center";
       ctx.textBaseline = "alphabetic";
       ctx.fillText(level + " / " + p.maxHp, backX + padX + dispW/2, backY + boxH - 5);
+      hudPipAt = { x: backX + padX + dispW/2, y: backY + boxH + 12 };
       ctx.textAlign = "left";
     } else if (img && img.ready){
       var dispW = dispH * (img.naturalWidth / img.naturalHeight);
@@ -6420,6 +6588,7 @@
       ctx.textAlign = "center";
       ctx.textBaseline = "alphabetic";
       ctx.fillText(level + " / " + p.maxHp, backX + padX + dispW/2, backY + padTop + dispH + 15);
+      hudPipAt = { x: backX + padX + dispW/2, y: backY + padTop + dispH + padBottom + 12 };
       ctx.textAlign = "left";
     } else {
       // simple fallback bar while the flask art decodes
@@ -6467,11 +6636,13 @@
     drawMapItem();
     drawPotion();
     drawExitHints();
-    enemies.forEach(drawEnemy);
-    drawBoss();
+    enemies.forEach(function(en){ drawShocked(en, drawEnemy); });
+    drawShocked(boss, function(){ drawBoss(); });
     drawHeart();
     drawIceHeart();
     if (gameState !== "start") drawPlayer();
+    if (gameState !== "start") drawForceField();
+    drawZaps();
     drawBossAttacks();
     drawExplosionFx();
     ctx.restore();
@@ -6483,6 +6654,7 @@
 
     if (gameState === "playing" || gameState === "win" || gameState === "gameover"){
       drawHUD();
+      drawFieldPips();
       drawBossBar();
     }
     if (gameState === "playing"){ drawStageBanner(); drawAbilityCard(); drawItemCard(); }
