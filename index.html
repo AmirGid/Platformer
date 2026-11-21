@@ -2185,10 +2185,12 @@
     var c = abilityCard;
     if (!c) return;
     c.t += dt;
-    var dash = c.kind === "dash", used = dash ? player.dashes : player.doubleJumps;
+    var dash = c.kind === "dash", field = c.kind === "field";
+    var used = field ? (player.ffT > 0 ? 2 : 0) : dash ? player.dashes : player.doubleJumps;
     if (c.state === "pending"){
-      if ((dash || stageIndex === FROST_STAGE) && stageBannerT <= 0){ c.state = "show"; c.t = 0; c.used0 = used; SFX.play("ability"); }
+      if ((dash || field || stageIndex === FROST_STAGE) && stageBannerT <= 0){ c.state = "show"; c.t = 0; c.used0 = field ? 0 : used; SFX.play("ability"); }
     } else if (c.state === "show"){
+      // the force field card stays until the field has gone up once (or ~15 s)
       if ((c.t > 150 && used - c.used0 >= 2) || c.t > 900){ c.state = "hide"; c.t = 0; }
     } else if (c.state === "hide" && c.t > 24){
       abilityCard = null;
@@ -2296,6 +2298,97 @@
     drawDashBadge(dx + dw + 52, dy + dh/2 - 4, since >= 0 && since < 10);
   }
 
+  // Force field demo loop: imps walk in one after another; the first three
+  // fall to the sword (a pip lights for each), the third raises the field,
+  // and the fourth walks into it, flickers purple and white and drops.
+  var FIELD_DEMO_LOOP = 260, FIELD_DEMO_SPEED = 2.4;
+  function drawFieldDemo(c, x, y){
+    var dx = x + 24, dy = y + 64, dw = 262, dh = 96;
+    roundRect(dx, dy, dw, dh, 8);
+    ctx.fillStyle = "rgba(110,80,160,0.5)";
+    ctx.fill();
+    var groundY = dy + dh - 12, heroX = dx + 62;
+    ctx.fillStyle = "rgba(225,210,255,0.85)";
+    ctx.fillRect(dx + 10, groundY, dw - 20, 3);
+    var tt = Math.floor(c.t) % FIELD_DEMO_LOOP;
+    var kills = 0, swing = false, fieldFrom = -1;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(dx, dy, dw, dh); ctx.clip();
+    for (var i = 0; i < 4; i++){
+      var born = 10 + i * 45, stopX = i < 3 ? heroX + 30 : heroX + 44;
+      var arrive = born + Math.ceil((dx + dw - 14 - stopX) / FIELD_DEMO_SPEED);
+      if (tt < born) continue;
+      var ix = Math.max(stopX, dx + dw - 14 - (tt - born) * FIELD_DEMO_SPEED);
+      var since = tt - arrive, dead = i < 3 ? since >= 0 : since >= 22;
+      if (i < 3 && since >= 0){ kills++; if (since < 10) swing = true; }
+      if (i === 2 && since >= 0) fieldFrom = arrive;
+      if (dead && since > (i < 3 ? 10 : 32)) continue;           // gone
+      var imp = IMP_SPRITES[since < 0 ? "walk" + (Math.floor(tt / 5) % 6) : "idle"];
+      if (!imp || !imp.ready) continue;
+      var iS = 0.2, iw = imp.naturalWidth * iS, ih = imp.naturalHeight * iS;
+      ctx.save();
+      ctx.translate(ix, groundY);
+      ctx.scale(-1, 1);                                        // walking toward the hero
+      if (i < 3 && since >= 0){ ctx.globalAlpha = Math.max(0, 1 - since / 10); ctx.filter = "brightness(2.4) saturate(0.3)"; }
+      if (i === 3 && since >= 0){
+        ctx.filter = Math.floor(since / 4) % 2 ? "sepia(1) hue-rotate(225deg) saturate(6) brightness(1.25)" : "brightness(2.8) saturate(0)";
+        if (since >= 22) ctx.globalAlpha = Math.max(0, 1 - (since - 22) / 10);
+      }
+      ctx.drawImage(imp, -iw / 2, -ih, iw, ih);
+      ctx.restore();
+      // the zap
+      if (i === 3 && since >= 0 && since < 10){
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        ctx.strokeStyle = "rgba(230,200,255,0.95)"; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(heroX + 4, groundY - 18);
+        for (var k = 1; k < 4; k++) ctx.lineTo(heroX + 4 + (ix - heroX - 4) * k / 4, groundY - 18 + (Math.random() - 0.5) * 10);
+        ctx.lineTo(ix, groundY - 14); ctx.stroke();
+        ctx.restore();
+      }
+    }
+    // the hero
+    var key = swing ? "attack4" : "idle", img = PLAYER_SPRITES[key];
+    if (img && img.ready){
+      var S = 0.3, w = img.naturalWidth * S, h = img.naturalHeight * S;
+      ctx.save();
+      ctx.translate(heroX, groundY);
+      if (!SPRITE_FACES_RIGHT[key]) ctx.scale(-1, 1);
+      ctx.drawImage(img, -w / 2 + (swing ? (PLAYER_SHIFT_X.attack4 || 0) * S : 0), -h, w, h);
+      ctx.restore();
+    }
+    // the field, from the third kill to the end of the loop
+    if (fieldFrom >= 0){
+      var age = tt - fieldFrom, R = 34 * (1 + 0.04 * Math.sin(c.t * 0.25)) * Math.min(1, age / 6);
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = Math.min(1, (FIELD_DEMO_LOOP - tt) / 10);
+      if (FIELD_ART.ready){
+        var hi = PLAYER_SPRITES.idle, midY = hi && hi.ready ? groundY - hi.naturalHeight * 0.3 / 2 : groundY - 20;
+        ctx.translate(heroX, midY); ctx.rotate(c.t * 0.02);                 // centred on the little hero
+        ctx.drawImage(FIELD_ART, -R * 1.25, -R * 1.25, R * 2.5, R * 2.5);
+      }
+      ctx.restore();
+    }
+    ctx.restore();
+    // kill counter: three pips that fill, then flash while the field is up
+    var px = dx + dw + 52, py = dy + dh / 2 - 4;
+    ctx.save();
+    roundRect(px - 30, py - 22, 60, 44, 8);
+    ctx.fillStyle = "rgba(40,24,70,0.9)"; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = "rgba(190,150,255,0.7)"; ctx.stroke();
+    for (var pi = 0; pi < 3; pi++){
+      var lit = pi < kills, flash = fieldFrom >= 0 && Math.floor(c.t / 6) % 2;
+      ctx.fillStyle = lit ? (flash ? "#ffffff" : "#b77bff") : "rgba(120,90,170,0.35)";
+      ctx.beginPath(); ctx.arc(px - 16 + pi * 16, py - 6, 5, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = "#eadcff";
+    ctx.font = "7px 'Press Start 2P', monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("KILLS", px, py + 13);
+    ctx.restore();
+  }
+
   function drawJumpBadge(x, y, lit){
     ctx.save();
     roundRect(x - 17, y - 17, 34, 34, 8);
@@ -2320,7 +2413,7 @@
     ctx.globalAlpha = a;
 
     // panel
-    var dashCard = c.kind === "dash";
+    var dashCard = c.kind === "dash" || c.kind === "field";
     roundRect(x, y, CARD_W, CARD_H, 14);
     ctx.fillStyle = dashCard ? "rgba(18,8,32,0.88)" : "rgba(6,16,30,0.86)";
     ctx.fill();
@@ -2330,6 +2423,26 @@
     ctx.shadowBlur = 16;
     ctx.stroke();
     ctx.shadowBlur = 0;
+    if (c.kind === "field"){
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#d8c2ff";
+      ctx.font = "10px 'Press Start 2P', monospace";
+      ctx.fillText("NEW ABILITY", VW/2, y + 26);
+      ctx.fillStyle = "#f4ecff";
+      ctx.shadowColor = "rgba(170,110,255,0.9)";
+      ctx.shadowBlur = 12;
+      ctx.font = "20px 'Press Start 2P', monospace";
+      ctx.fillText("FORCE FIELD", VW/2, y + 54);
+      ctx.shadowBlur = 0;
+      drawFieldDemo(c, x, y);
+      ctx.fillStyle = "#e6daf7";
+      ctx.font = "8px 'Press Start 2P', monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("EVERY 3RD KILL RAISES IT FOR 5 SECONDS", VW/2, y + CARD_H - 24);
+      ctx.fillText("ANYTHING THAT TOUCHES IT GETS SHOCKED", VW/2, y + CARD_H - 10);
+      ctx.restore();
+      return;
+    }
     if (dashCard){
       ctx.textAlign = "center";
       ctx.fillStyle = "#d8c2ff";
@@ -4352,7 +4465,16 @@
   var FIELD_ART = loadArt("assets/force_field.jpg");      // the ring's glow on black, drawn additively
   var zaps = [];                                          // lightning from you to whatever got shocked
   function fieldOn(){ return player && player.ffT > 0; }
-  function fieldCentre(){ return { x: player.x + player.w / 2, y: player.y + player.h / 2 }; }
+  // centred on the hero as drawn (the sprite stands on the hitbox's feet and
+  // rises well above it), not on the small hitbox itself
+  function fieldCentre(){
+    var im = PLAYER_SPRITES.idle, footY = player.y + player.h, cy = player.y + player.h / 2;
+    if (im && im.ready){
+      var dH = im.naturalHeight / 2, lift = (im.padB || 0) / 2 - PLAYER_FOOT_LIFT;
+      cy = footY + lift - dH / 2;
+    }
+    return { x: player.x + player.w / 2, y: cy };
+  }
   // does a box touch the field's circle?
   function fieldTouches(box){
     if (!fieldOn()) return false;
@@ -4885,7 +5007,7 @@
       h.state = "taken"; h.t = 0;
       SFX.play("heal");
       player.hp = player.maxHp;                                 // like the golem's and the wyrm's: a full flask
-      player.hasForceField = true;                              // ...and the force field, every third kill
+      if (!player.hasForceField){ player.hasForceField = true; abilityCard = { state: "pending", t: 0, kind: "field" }; }   // ...and the force field, every third kill
       player.invuln = Math.max(player.invuln, 30);
       shake = Math.max(shake, 8);
       techHeartSparks(h, 40, 6);
