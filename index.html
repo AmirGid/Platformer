@@ -638,6 +638,17 @@
   var sfxIce = new Audio("assets/sfx_ice_break.mp3");
   sfxIce.volume = 0.9 * sfxVol;
   sfxIce.preload = "auto";
+  // Metallic door, played as the lab's east door starts to shut or open.
+  var sfxDoor = new Audio("assets/sfx_door.mp3");
+  sfxDoor.volume = 0.9 * sfxVol;
+  sfxDoor.preload = "auto";
+  function playDoorSound(){
+    try {
+      sfxDoor.currentTime = 0;
+      var p = sfxDoor.play();
+      if (p && p.catch) p.catch(function(){});
+    } catch(e) {}
+  }
   function playIceBreak(){
     try {
       sfxIce.currentTime = 0;
@@ -834,7 +845,7 @@
     function setMuted(m){
       muted = m;
       if (out) out.gain.value = m ? 0 : 0.6 * sfxVol;
-      bgMusic.muted = m; sfxLaugh.muted = m; sfxIce.muted = m;
+      bgMusic.muted = m; sfxLaugh.muted = m; sfxIce.muted = m; sfxDoor.muted = m;
       EXTRA_TRACKS.forEach(function(a){ a.muted = m; });
       try { localStorage.setItem("df_muted", m ? "1" : "0"); } catch(e){}
     }
@@ -844,6 +855,7 @@
       setTrackVolumes();
       sfxLaugh.volume = 0.85 * sfxVol;
       sfxIce.volume = 0.9 * sfxVol;
+      sfxDoor.volume = 0.9 * sfxVol;
     }
     return { init: init, play: play, setMuted: setMuted, setVolumes: setVolumes, isMuted: function(){ return muted; } };
   })();
@@ -984,7 +996,10 @@
    // the prologue: the hero's home village, burning on the night of the attack
    ["village", "assets/village_background.jpg", 1.12, 0.16, "10,6,22"],
    // Itay's Secret Lab: a machine works buried in the ice cave
-   ["lab", "assets/lab_background.jpg", 1.12, 0.22, "4,8,14"]].forEach(function(d){
+   ["lab", "assets/lab_background.jpg", 1.12, 0.22, "4,8,14"],
+   // the same lab with its east door half shut and shut (Itay's fight locks it)
+   ["lab_mid", "assets/lab_door_mid.jpg", 1.12, 0.22, "4,8,14"],
+   ["lab_closed", "assets/lab_door_closed.jpg", 1.12, 0.22, "4,8,14"]].forEach(function(d){
     var im = new Image();
     var entry = { img: im, ready: false, w: 0, h: 0, dim: d[3], frost: !d[4], dimRGB: d[4] };
     im.onload = function(){
@@ -3718,7 +3733,7 @@
 
     // Walking off an edge that has an exit moves to that stage.
     var exits = STAGES[stageIndex].exits || {};
-    if (player.x + player.w >= WORLD_W && player.vx > 0 && exits.right !== undefined){
+    if (player.x + player.w >= WORLD_W && player.vx > 0 && exits.right !== undefined && !labLocked()){
       loadStage(exits.right, "left");
       return;
     }
@@ -4352,8 +4367,23 @@
       kind: "itay", x: stage.itayX || 420, y: GROUND_Y, vx: 0, vy: 0, facing: 1,
       hp: ITAY_HP, maxHp: ITAY_HP, phase2: false, arenaX: stage.arenaX,
       state: "waiting", t: 0, anim: 0, nextAttackIn: 50, fired: 0, slams: 0,
-      hitFlash: 0, invuln: 0, dead_t: 0, alpha: 1, counterT: 0
+      hitFlash: 0, invuln: 0, dead_t: 0, alpha: 1, counterT: 0,
+      door: 0, doorTo: 0, doorHold: 0     // the lab's east door: 0 open, 1 half shut, 2 shut
     };
+  }
+  // while the door is anything but fully open you can't leave
+  function labLocked(){ return !!(boss && boss.kind === "itay" && boss.door > 0); }
+  var DOOR_STEP = 1 / 14, DOOR_HOLD = 12;
+  function updateLabDoor(b, dt){
+    if (b.door === b.doorTo){ b.doorMoving = false; return; }
+    if (!b.doorMoving){ b.doorMoving = true; playDoorSound(); }   // one clang for the whole move, shut or open
+    if (b.doorHold > 0){ b.doorHold -= dt; return; }
+    var dir = b.doorTo > b.door ? 1 : -1, before = b.door;
+    b.door += dir * DOOR_STEP * dt;
+    // pause on the half-way painting, then carry on
+    if ((before < 1 && b.door >= 1) || (before > 1 && b.door <= 1)){ b.door = 1; if (b.doorTo !== 1) b.doorHold = DOOR_HOLD; }
+    if (dir > 0 && b.door >= b.doorTo){ b.door = b.doorTo; shake = Math.max(shake, 10); buzz(60); }
+    if (dir < 0 && b.door <= b.doorTo) b.door = b.doorTo;
   }
   function itayBox(b){ return rect(b.x - 32, b.y - 176, 64, 172); }
   function itayState(b, s){
@@ -4405,6 +4435,7 @@
     if (b.hitFlash > 0) b.hitFlash -= dt;
     if (b.invuln > 0) b.invuln -= dt;
     if (b.counterT > 0) b.counterT -= dt;
+    updateLabDoor(b, dt);
     updateLabAttacks(dt, hitbox);
     if (b.state === "dead"){
       var before = b.dead_t;
@@ -4419,6 +4450,7 @@
       }
       b.alpha = b.dead_t < 100 ? 1 : Math.max(0, 1 - (b.dead_t - 100) / 12);
       if (b.heart) updateTechHeart(b, dt);
+      if (b.dead_t >= 130) b.doorTo = 0;            // beaten: the door slides open again
       return;
     }
     var mul = b.phase2 ? 1.35 : 1;
@@ -4429,7 +4461,7 @@
     switch (b.state){
       case "waiting":
         faceP();
-        if (player.x < b.arenaX){ itayState(b, "intro"); shake = 8; }
+        if (player.x < b.arenaX){ itayState(b, "intro"); shake = 8; b.doorTo = 2; }   // the door slams shut behind you
         break;
       case "intro":
         faceP();
@@ -5365,6 +5397,19 @@
       ctx.restore();
     }
   }
+  // Itay's lab: open -> half shut -> shut (and back), crossfading between
+  // the three paintings as the door moves (boss.door: 0 open .. 2 shut)
+  var LAB_DOOR_ART = ["lab", "lab_mid", "lab_closed"];
+  function drawLabBackdrop(){
+    var d = boss && boss.kind === "itay" ? boss.door : 0;
+    var lo = Math.floor(d), k = d - lo;
+    drawScrollingBackdrop(BACKDROPS[LAB_DOOR_ART[lo]], "lab");
+    if (k > 0 && BACKDROPS[LAB_DOOR_ART[lo + 1]].ready){
+      ctx.save(); ctx.globalAlpha = k;
+      drawScrollingBackdrop(BACKDROPS[LAB_DOOR_ART[lo + 1]], "lab");
+      ctx.restore();
+    }
+  }
   function drawScrollingBackdrop(bd, key){
     if (bd.ready){
       var topY = key ? STAGES[stageIndex].topY : STAGES[FROST_STAGE].topY;
@@ -5410,6 +5455,7 @@
     var backdrop = STAGES[stageIndex].backdrop;
     if (backdrop === "frost"){ drawFrostBackdrop(); return; }
     if (backdrop === "den" || backdrop === "tundra" || backdrop === "village" || STAGES[stageIndex].realm){ drawFrostBackdrop(backdrop); return; }
+    if (backdrop === "lab"){ drawLabBackdrop(); return; }
     if (backdrop && backdrop !== "forest"){
       var bd = BACKDROPS[backdrop];
       if (bd && bd.ready){
@@ -5719,7 +5765,7 @@
     }
     var exits = STAGES[stageIndex].exits || {};
     if (exits.left !== undefined) hint(0, -1);
-    if (exits.right !== undefined) hint(WORLD_W, 1);
+    if (exits.right !== undefined && !labLocked()) hint(WORLD_W, 1);
   }
 
   function drawStageBanner(){
