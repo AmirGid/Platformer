@@ -601,15 +601,20 @@
   var itayMusic = new Audio("assets/itay_music.mp3");
   itayMusic.loop = true;
   itayMusic.preload = "none";              // fetched once the lab loads
+  // the Squishy Queen's fight: "Forest Boss Battle"
+  var queenMusic = new Audio("assets/queen_music.mp3");
+  queenMusic.loop = true;
+  queenMusic.preload = "none";             // fetched once her forest loads
   var STAGE_MUSIC = { village: new Audio("assets/village_music.mp3") };   // the Burning Village (prologue)
   STAGE_MUSIC.village.loop = true;
   STAGE_MUSIC.village.preload = "auto";
-  var EXTRA_TRACKS = [bossMusic, golemMusic, wyrmMusic, itayMusic, STAGE_MUSIC.village];
+  var EXTRA_TRACKS = [bossMusic, golemMusic, wyrmMusic, itayMusic, queenMusic, STAGE_MUSIC.village];
   function setTrackVolumes(){
     bossMusic.volume = 0.5 * musicVol;
     golemMusic.volume = 0.5 * musicVol;
     wyrmMusic.volume = 0.5 * musicVol;
     itayMusic.volume = 0.5 * musicVol;
+    queenMusic.volume = 0.5 * musicVol;
     STAGE_MUSIC.village.volume = 0.5 * musicVol;
   }
   setTrackVolumes();
@@ -636,6 +641,7 @@
     if (b.kind === "wraith") return bossMusic;
     if (b.kind === "wyrm") return wyrmMusic;
     if (b.kind === "itay") return itayMusic;
+    if (b.kind === "queen") return queenMusic;
     if (!b.kind) return golemMusic;          // the Magma Golem
     return null;
   }
@@ -1027,7 +1033,9 @@
    ["lab", "assets/lab_background.jpg", 1.12, 0.22, "4,8,14"],
    // the same lab with its east door half shut and shut (Itay's fight locks it)
    ["lab_mid", "assets/lab_door_mid.jpg", 1.12, 0.22, "4,8,14"],
-   ["lab_closed", "assets/lab_door_closed.jpg", 1.12, 0.22, "4,8,14"]].forEach(function(d){
+   ["lab_closed", "assets/lab_door_closed.jpg", 1.12, 0.22, "4,8,14"],
+   // Agam's Squishy Forest: bright pastel, barely dimmed
+   ["squishy", "assets/squishy_background.jpg", 1.12, 0.06, "60,20,70"]].forEach(function(d){
     var im = new Image();
     var entry = { img: im, ready: false, w: 0, h: 0, dim: d[3], frost: !d[4], dimRGB: d[4] };
     im.onload = function(){
@@ -1197,7 +1205,9 @@
     village_floor: loadArt("assets/plat_village_floor.png", { top: 0.3, mid: [0.3, 0.7], th: 230 }),
     // Itay's Secret Lab's machine decks: a long railed one (ground) and a short one (ledges)
     lab_long: loadArt("assets/plat_lab_long.png", { top: 0.28, mid: [0.55, 0.72], th: 230 }),
-    lab_deck: loadArt("assets/plat_lab_deck.png", { top: 0.16 })
+    lab_deck: loadArt("assets/plat_lab_deck.png", { top: 0.16 }),
+    // Agam's Squishy Forest: a floating island of cushion tiles (ground repeats its middle)
+    squishy: loadArt("assets/plat_squishy.webp", { top: 0.06, mid: [0.3, 0.7], th: 190 })
   };
   // which pieces each realm stage builds with: ledges cycle through the list
   var REALM_SETS = {
@@ -1206,7 +1216,8 @@
     cathedral: { ledges: ["slab_plain", "slab_banner", "slab_chain"], ground: "slab_plain", wide: 1.1 },
     // the Burning Village: its own cobbled street with cart wheels and roof tiles
     village:   { ledges: ["village_floor"], ground: "village_floor", wide: 1.15 },
-    lab:       { ledges: ["lab_deck"], ground: "lab_long", wide: 1.15 }
+    lab:       { ledges: ["lab_deck"], ground: "lab_long", wide: 1.15 },
+    squishy:   { ledges: ["squishy"], ground: "squishy", wide: 1.2 }
   };
   // imps and wisps from the burning world look ghostly violet in the realm
   var REALM_FILTER = "hue-rotate(255deg) saturate(0.85) brightness(1.05)";
@@ -1904,15 +1915,24 @@
       enemies: []
     },
     {
-      // SECRET: past Cinder Cliffs' east end, over the top of the old tree.
-      // Empty for now.
-      name: "Hidden Grove",
+      // SECRET: past Cinder Cliffs' east end, over the top of the old tree:
+      // Agam's Squishy Forest, a pastel wood of cushion paths and poodles,
+      // where the Squishy Queen holds court.
+      name: "Agam's Squishy Forest",
       kicker: "SECRET",
       exits: { left: 5 },
-      tint: "rgba(150,40,10,0.28)",
-      width: 1400,
-      ground: [[0, 1400]],
-      platforms: [],
+      backdrop: "squishy",
+      tiles: "squishy",
+      oneWay: true,                 // jump up through the floating islands
+      boss: "queen",
+      queenX: 1200,                 // where she waits
+      arenaX: 420,                  // walking in past this starts the fight
+      width: 1500,
+      ground: [[0, 1500]],
+      platforms: [
+        [250, 340, 230], [1020, 340, 230],   // two low islands
+        [620, 220, 260]                      // a high one between them
+      ],
       enemies: []
     }
   ];
@@ -2887,7 +2907,7 @@
                    .concat((s.flyers || []).map(function(route, i){ var f = makeFlyer(route, i); f.frost = frost; return f; }))
                    .concat((s.shades || []).map(makeShade))
                    .concat((s.ghosts || []).map(makeGhost)),
-        boss: s.boss === "wyrm" ? makeWyrm(s) : s.boss === "wraith" ? makeWraith(s) : s.boss === "itay" ? makeItay(s) : s.boss ? makeBoss(s.width) : null
+        boss: s.boss === "wyrm" ? makeWyrm(s) : s.boss === "wraith" ? makeWraith(s) : s.boss === "itay" ? makeItay(s) : s.boss === "queen" ? makeQueen(s) : s.boss ? makeBoss(s.width) : null
       };
     });
     icicles = [];
@@ -2923,7 +2943,8 @@
     stageIndex = index;
     player.visited[mapKey(index)] = true;
     var stage = STAGES[index];
-    labBolts = []; labWaves = [];
+    labBolts = []; labWaves = []; queenHearts = []; queenRollers = [];
+    if (stage.boss === "queen" && queenMusic.preload !== "auto"){ queenMusic.preload = "auto"; queenMusic.load(); }
     if (stage.boss === "itay" && itayMusic.preload !== "auto"){ itayMusic.preload = "auto"; itayMusic.load(); }
     if (stage.boss === "wraith" && bossMusic.preload !== "auto"){ bossMusic.preload = "auto"; bossMusic.load(); }
     if (stage.boss === true && golemMusic.preload !== "auto"){ golemMusic.preload = "auto"; golemMusic.load(); }
@@ -3258,7 +3279,7 @@
     "boss": { x: 130, y: 64,  w: 112, h: 96, name: "Molten Core",   color: "#7a3410" },
     "8":    { x: 0,   y: 104, w: 112, h: 56, name: "Frozen Den",    color: "#2f6080" },
     "13":   { x: -130, y: 104, w: 112, h: 56, name: "Itay's Secret Lab", color: "#24506e" },
-    "14":   { x: 520, y: 0,   w: 112, h: 56, name: "Hidden Grove",  color: "#5a2a14" },
+    "14":   { x: 520, y: 0,   w: 112, h: 56, name: "Squishy Forest", color: "#a0508a" },
     "6":    { x: 429, y: 64,  w: 34,  h: 32, name: "",              color: "#3a1a44" },
     "7":    { x: 390, y: 104, w: 112, h: 56, name: "Obsidian Gate", color: "#2f5a7a" },
     // the shadow realm, reached only through the Frozen Den's portal:
@@ -3853,7 +3874,7 @@
     var btrack = bossTrackFor(boss);
     if (btrack && !bossTrack && boss.state !== "dead" && !(boss.kind === "wraith" && endingPlayed) &&
         boss.x > camX - 120 && boss.x - 120 < camX + VW) setBossMusic(btrack);   // any part of it on screen
-    if ((bossTrack === golemMusic || bossTrack === wyrmMusic || (boss && boss.kind === "itay")) && (!boss || boss.state === "dead")) setBossMusic(null);
+    if ((bossTrack === golemMusic || bossTrack === wyrmMusic || (boss && (boss.kind === "itay" || boss.kind === "queen"))) && (!boss || boss.state === "dead")) setBossMusic(null);
     if (vortexExit){
       var vb = vortexExit.t;
       vortexExit.t += dt;
@@ -4263,6 +4284,7 @@
     if (boss.kind === "wyrm"){ updateWyrm(dt, hitbox); return; }
     if (boss.kind === "wraith"){ updateWraith(dt, hitbox); return; }
     if (boss.kind === "itay"){ updateItay(dt, hitbox); return; }
+    if (boss.kind === "queen"){ updateQueen(dt, hitbox); return; }
     var b = boss;
     b.anim += dt;
     if (b.hitFlash > 0) b.hitFlash -= dt;
@@ -4405,6 +4427,7 @@
     if (b.kind === "wyrm"){ drawWyrm(b); return; }
     if (b.kind === "wraith"){ drawWraith(b); return; }
     if (b.kind === "itay"){ drawItay(b); if (b.heart) drawTechHeart(b.heart); return; }
+    if (b.kind === "queen"){ drawQueen(b); return; }
     var img = BOSS_SPRITES[bossPose(b)];
     var sx = b.x - camX;
     ctx.save();
@@ -4461,6 +4484,7 @@
 
   function drawBossAttacks(){
     drawLabAttacks();
+    drawQueenAttacks();
     drawIcicles();
     drawSouls();
     drawGhostBolts();
@@ -4503,16 +4527,17 @@
     ctx.fillStyle = "rgba(10,6,8,0.6)";
     roundRect(x - 10, y - 24, w + 20, h + 34, 10);
     ctx.fill();
-    var icy = b.kind === "wyrm", shade = b.kind === "wraith", tech = b.kind === "itay";
-    ctx.fillStyle = tech ? "#bff3ff" : icy ? "#cdeeff" : shade ? "#e6d0ff" : "#ffcf9e";
+    var icy = b.kind === "wyrm", shade = b.kind === "wraith", tech = b.kind === "itay", sweet = b.kind === "queen";
+    ctx.fillStyle = sweet ? "#ffd6f0" : tech ? "#bff3ff" : icy ? "#cdeeff" : shade ? "#e6d0ff" : "#ffcf9e";
     ctx.font = "10px 'Press Start 2P', monospace";
     ctx.textAlign = "center";
-    ctx.fillText(tech ? ITAY_NAME : icy ? WYRM_NAME : shade ? WRAITH_NAME : BOSS_NAME, VW/2, y - 8);
-    ctx.fillStyle = tech ? "#0b1820" : icy ? "#0e1e2c" : shade ? "#1a0e2a" : "#2a1210";
+    ctx.fillText(sweet ? QUEEN_NAME : tech ? ITAY_NAME : icy ? WYRM_NAME : shade ? WRAITH_NAME : BOSS_NAME, VW/2, y - 8);
+    ctx.fillStyle = sweet ? "#2a1430" : tech ? "#0b1820" : icy ? "#0e1e2c" : shade ? "#1a0e2a" : "#2a1210";
     roundRect(x, y, w, h, 4); ctx.fill();
     var pct = b.hp / b.maxHp;
     var g = ctx.createLinearGradient(x, 0, x + w, 0);
-    if (tech){ g.addColorStop(0, "#ff8a2a"); g.addColorStop(1, "#4fe6ff"); }
+    if (sweet){ g.addColorStop(0, "#ff8ad0"); g.addColorStop(0.5, "#ffe08a"); g.addColorStop(1, "#8ad8ff"); }
+    else if (tech){ g.addColorStop(0, "#ff8a2a"); g.addColorStop(1, "#4fe6ff"); }
     else if (icy){ g.addColorStop(0, "#3aa8ff"); g.addColorStop(1, "#c8f4ff"); }
     else if (shade){ g.addColorStop(0, "#6a22e0"); g.addColorStop(1, "#e2a8ff"); }
     else { g.addColorStop(0, "#ff4a1c"); g.addColorStop(1, "#ffb347"); }
@@ -4589,13 +4614,14 @@
     if (b.shockT > 0) b.shockT -= dt;
     if (!fieldOn() || b.shockT > 0 || b.state === "waiting" || b.state === "intro" || b.state === "dead" || b.hp <= 0) return;
     if (b.alpha !== undefined && b.alpha < 0.5) return;
-    var box = b.kind === "wyrm" ? wyrmBox(b) : b.kind === "wraith" ? wraithBox(b) : b.kind === "itay" ? itayBox(b) : bossBox(b);
+    var box = b.kind === "wyrm" ? wyrmBox(b) : b.kind === "wraith" ? wraithBox(b) : b.kind === "itay" ? itayBox(b) : b.kind === "queen" ? queenBox(b) : bossBox(b);
     if (!fieldTouches(box)) return;
     b.shockT = SHOCK_T;
     zapTo(box.x + box.w / 2, box.y + box.h / 2);
     if (b.kind === "wyrm") damageWyrm(b, 22);
     else if (b.kind === "wraith") damageWraith(b, 22);
     else if (b.kind === "itay") damageItay(b);
+    else if (b.kind === "queen") damageQueen(b);
     else damageBoss(b, 1, 22);
   }
   function updateForceField(dt){
@@ -4701,6 +4727,280 @@
       ctx.strokeStyle = "rgba(220,190,255,0.7)"; ctx.lineWidth = 1; ctx.stroke();
     }
     ctx.restore();
+  }
+
+  // ---------- Boss: the Squishy Queen (Agam's Squishy Forest) ----------
+  // A little queen in a puffy rainbow gown, with her pink poodle. She walks
+  // you down and picks from three moves:
+  //   throw  - winds up and throws a bouncy rainbow heart at you (three in a
+  //            fan below half health). Swat them, jump or dash past.
+  //   hop    - crouches, leaps high and lands on you with a squish that
+  //            sends a heart rolling out each way along the ground (jump them).
+  //   shield - "Squishy Shield": she clasps her hands and a rainbow bubble
+  //            wraps her. Hits bounce off and bounce you back. Wait it out.
+  // Below half health she's quicker and everything comes faster. Beaten, she
+  // sits down in a heap, then smiles and waves.
+  var QUEEN_HP = 20;
+  var QUEEN_NAME = "SQUISHY QUEEN";
+  var QUEEN_S = 1.0;                                     // frames are already cut to size
+  var QUEEN_SPRITES = {};
+  // ax = where the girl's middle sits across each frame (some frames have the poodle beside her)
+  [["idle0", 0.61], ["idle1", 0.37], ["walk0", 0.5], ["walk1", 0.5], ["walk2", 0.44],
+   ["jump0", 0.33], ["jump1", 0.44], ["jump2", 0.48], ["jump3", 0.48],
+   ["throw0", 0.48], ["throw1", 0.41], ["throw2", 0.4], ["shield0", 0.5],
+   ["defeat0", 0.38], ["defeat1", 0.36], ["heart", 0.5]].forEach(function(f){
+    QUEEN_SPRITES[f[0]] = loadArt("assets/queen_" + f[0] + ".webp", { ax: f[1] });
+  });
+  var queenHearts = [], queenRollers = [];
+
+  function makeQueen(stage){
+    return {
+      kind: "queen", x: stage.queenX || 1150, y: GROUND_Y, vx: 0, vy: 0, facing: -1,
+      hp: QUEEN_HP, maxHp: QUEEN_HP, phase2: false, arenaX: stage.arenaX,
+      state: "waiting", t: 0, anim: 0, nextAttackIn: 50, fired: 0,
+      hitFlash: 0, invuln: 0, dead_t: 0, squash: 0
+    };
+  }
+  function queenBox(b){ return rect(b.x - 34, b.y - 130, 68, 126); }
+  function queenState(b, s){
+    b.state = s; b.t = 0; b.fired = 0;
+    if (s === "intro") SFX.play("ability", 0.7);
+    if (s === "shield") SFX.play("heal", 0.7);
+    if (s === "hop") SFX.play("jump");
+  }
+  function queenSparkles(x, y, n, power){
+    for (var i = 0; i < n; i++){
+      var ang = Math.random() * Math.PI * 2, sp = 1 + Math.random() * power, life = 22 + Math.random() * 26;
+      explosionParticles.push({ x: x, y: y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 1.2,
+        life: life, maxLife: life, size: 1.6 + Math.random() * 2.6, color: ["255,170,220", "170,220,255", "255,240,150", "200,170,255"][i % 4] });
+    }
+  }
+  function queenThrow(b, angOff){
+    var hx = b.x + b.facing * 46, hy = b.y - 92;
+    var tx = player.x + player.w / 2, ty = player.y + player.h / 2;
+    var ang = Math.atan2(ty - hy, tx - hx) + (angOff || 0), sp = 5.2 * (b.phase2 ? 1.2 : 1);
+    queenHearts.push({ x: hx, y: hy, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, t: 0, spin: Math.random() * 6 });
+    SFX.play("swing", 0.6);
+  }
+  function damageQueen(b){
+    b.hp -= 1; b.invuln = 20; b.hitFlash = 10;
+    SFX.play(b.hp <= 0 ? "bossDeath" : "bossHit");
+    shake = Math.max(shake, 5);
+    impact(b.hp <= 0 ? 12 : 4, b.hp <= 0 ? [90, 40, 200] : 40);
+    queenSparkles(b.x, b.y - 70, 10, 3);
+    if (!b.phase2 && b.hp <= b.maxHp / 2){ b.phase2 = true; queenSparkles(b.x, b.y - 70, 30, 5); SFX.play("ability"); }
+    if (b.hp <= 0){
+      b.hp = 0; b.y = GROUND_Y; b.vy = 0;
+      queenState(b, "dead");
+      queenHearts = []; queenRollers = [];
+      shake = 16;
+      queenSparkles(b.x, b.y - 60, 50, 6);
+    }
+  }
+
+  function updateQueen(dt, hitbox){
+    var b = boss;
+    b.anim += dt;
+    if (b.hitFlash > 0) b.hitFlash -= dt;
+    if (b.invuln > 0) b.invuln -= dt;
+    if (b.squash > 0) b.squash = Math.max(0, b.squash - dt);
+    updateQueenAttacks(dt, hitbox);
+    if (b.state === "dead"){
+      b.dead_t += dt;
+      if (b.dead_t > 90 && Math.random() < 0.08 * dt) queenSparkles(b.x + (Math.random() - 0.5) * 80, b.y - 60 - Math.random() * 60, 2, 1.5);
+      return;
+    }
+    var mul = b.phase2 ? 1.3 : 1;
+    var pcx = player.x + player.w / 2;
+    var lo = 80, hi = WORLD_W - 80;
+    function faceP(){ if (Math.abs(pcx - b.x) > 10) b.facing = pcx > b.x ? 1 : -1; }
+    b.t += dt;
+    switch (b.state){
+      case "waiting":
+        faceP();
+        if (player.x > b.arenaX){ queenState(b, "intro"); shake = 6; }
+        break;
+      case "intro":
+        faceP();
+        if (b.t > 70){ queenState(b, "walk"); b.nextAttackIn = 30; }
+        break;
+      case "walk":
+        faceP();
+        var dist = Math.abs(pcx - b.x), want = dist > 280 ? 1 : dist < 160 ? -1 : 0;
+        b.vx = want * b.facing * 1.9 * mul;
+        b.x += b.vx * dt;
+        if (b.t > b.nextAttackIn){
+          var r = Math.random();
+          queenState(b, r < 0.45 ? "throw" : r < 0.78 ? "crouch" : "shield");
+        }
+        break;
+      case "throw":
+        faceP();
+        var rel = b.phase2 ? 16 : 22;
+        if (b.t >= rel && !b.fired){
+          b.fired = 1;
+          queenThrow(b, 0);
+          if (b.phase2){ queenThrow(b, -0.3); queenThrow(b, 0.3); }
+        }
+        if (b.t > rel + 26){ queenState(b, "walk"); b.nextAttackIn = (40 + Math.random() * 40) / mul; }
+        break;
+      case "crouch":
+        faceP();
+        if (b.t > (b.phase2 ? 16 : 24)){
+          b.vy = -13.5; b.vx = Math.max(-7, Math.min(7, (pcx - b.x) / 34)) * mul;
+          queenState(b, "hop");
+        }
+        break;
+      case "hop":
+        b.vy += 0.55 * dt;
+        b.x += b.vx * dt; b.y += b.vy * dt;
+        if (b.y >= GROUND_Y && b.vy > 0){
+          b.y = GROUND_Y; b.vy = 0; b.vx = 0; b.squash = 16;
+          SFX.play("splat"); shake = Math.max(shake, 10); buzz(50);
+          queenRollers.push({ x: b.x - 40, dir: -1, t: 0, spin: 0 }, { x: b.x + 40, dir: 1, t: 0, spin: 0 });
+          queenSparkles(b.x, GROUND_Y - 10, 24, 4);
+          queenState(b, "land");
+        }
+        break;
+      case "land":        // squished, catching her breath: the opening
+        if (b.t > (b.phase2 ? 30 : 46)){ queenState(b, "walk"); b.nextAttackIn = (30 + Math.random() * 30) / mul; }
+        break;
+      case "shield":
+        faceP();
+        if (b.t > (b.phase2 ? 100 : 80)){ queenState(b, "walk"); b.nextAttackIn = (24 + Math.random() * 24) / mul; }
+        break;
+    }
+    b.x = Math.max(lo, Math.min(hi, b.x));
+
+    var box = queenBox(b), hittable = b.state !== "waiting" && b.state !== "intro";
+    if (hittable && b.invuln <= 0 && hitbox && intersects(hitbox, box)){
+      if (b.state === "shield"){
+        // boing: the bubble bounces the blade, and you, back
+        b.invuln = 12;
+        SFX.play("jump", 0.8); shake = Math.max(shake, 4);
+        queenSparkles(b.x + (pcx > b.x ? 70 : -70), b.y - 80, 12, 3);
+        player.vx = (pcx > b.x ? 1 : -1) * 9; player.vy = -6; player.x += (pcx > b.x ? 1 : -1) * 22;
+      } else damageQueen(b);
+    } else if (hittable && b.invuln <= 0 && b.state !== "shield" && player.superMode && intersects(player, box)){
+      damageQueen(b);
+    }
+    if (hittable && b.state !== "shield" && intersects(player, box))
+      hurtPlayer(b.x, b.state === "hop" ? "The Squishy Queen squished you flat." : "The Squishy Queen bumped you over.");
+    if (b.state === "shield" && intersects(player, rect(b.x - 95, b.y - 180, 190, 180))){
+      player.x += (pcx > b.x ? 1 : -1) * 6 * dt;       // the bubble pushes you away (no damage)
+    }
+  }
+
+  function updateQueenAttacks(dt, hitbox){
+    for (var i = queenHearts.length - 1; i >= 0; i--){
+      var h = queenHearts[i];
+      h.t += dt; h.x += h.vx * dt; h.y += h.vy * dt + Math.sin(h.t * 0.25) * 0.6 * dt; h.spin += 0.12 * dt;
+      var hb = rect(h.x - 13, h.y - 13, 26, 26);
+      var gone = h.x < -30 || h.x > WORLD_W + 30 || h.y > GROUND_Y + 6 || h.y < -300 || h.t > 320;
+      if (!gone && hitbox && intersects(hitbox, hb)){ gone = true; SFX.play("swat"); shake = Math.max(shake, 3); }
+      else if (!gone && intersects(player, hb)){ gone = true; hurtPlayer(h.x, "A squishy heart knocked you down."); }
+      if (gone){ queenSparkles(h.x, Math.min(h.y, GROUND_Y - 6), 8, 2.5); queenHearts.splice(i, 1); }
+    }
+    for (var j = queenRollers.length - 1; j >= 0; j--){
+      var r = queenRollers[j];
+      r.t += dt; r.x += r.dir * 6.2 * (boss && boss.phase2 ? 1.2 : 1) * dt; r.spin += r.dir * 0.25 * dt;
+      if (intersects(player, rect(r.x - 14, GROUND_Y - 30, 28, 30))) hurtPlayer(r.x, "A rolling heart bowled you over.");
+      if (r.x < -40 || r.x > WORLD_W + 40) queenRollers.splice(j, 1);
+    }
+  }
+
+  function queenPose(b){
+    switch (b.state){
+      case "waiting": case "intro": return Math.floor(b.anim * 0.03) % 2 ? "idle1" : "idle0";
+      case "walk": return Math.abs(b.vx) > 0.1 ? ["walk0", "walk1", "walk2", "walk1"][Math.floor(b.anim * 0.1) % 4] : (Math.floor(b.anim * 0.03) % 2 ? "idle1" : "idle0");
+      case "throw": var rel = b.phase2 ? 16 : 22; return b.t < rel - 6 ? "throw0" : b.t < rel + 8 ? "throw1" : "throw2";
+      case "crouch": return "jump0";
+      case "hop": return b.vy < 0 ? "jump1" : "jump3";
+      case "land": return b.t < 18 ? "jump2" : "idle0";
+      case "shield": return "shield0";
+      case "dead": return b.dead_t < 90 ? "defeat0" : "defeat1";
+    }
+    return "idle0";
+  }
+  function drawQueenBubble(cx, cy, R, a, t){
+    ctx.save();
+    ctx.globalAlpha = a;
+    var g = ctx.createRadialGradient(cx - R * 0.25, cy - R * 0.3, R * 0.1, cx, cy, R);
+    g.addColorStop(0, "rgba(255,255,255,0.12)"); g.addColorStop(0.7, "rgba(255,190,240,0.18)"); g.addColorStop(1, "rgba(190,230,255,0.6)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
+    // white glow, then a rainbow rim
+    ctx.shadowColor = "rgba(255,255,255,0.9)"; ctx.shadowBlur = 14;
+    ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(cx, cy, R + 2, 0, Math.PI * 2); ctx.stroke();
+    ctx.shadowBlur = 0;
+    var cols = ["255,110,190", "255,200,90", "110,220,160", "100,180,255", "180,120,255"];
+    for (var k = 0; k < cols.length; k++){
+      ctx.strokeStyle = "rgba(" + cols[k] + ",0.95)"; ctx.lineWidth = 5;
+      var a0 = t * 0.02 + k * Math.PI * 2 / cols.length;
+      ctx.beginPath(); ctx.arc(cx, cy, R - 1, a0, a0 + Math.PI * 2 / cols.length + 0.05); ctx.stroke();
+    }
+    // shine and a few stars inside
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.beginPath(); ctx.ellipse(cx - R * 0.45, cy - R * 0.5, R * 0.18, R * 0.09, -0.6, 0, Math.PI * 2); ctx.fill();
+    for (var s = 0; s < 6; s++){
+      var sa = t * 0.015 + s * 1.05, sr = R * (0.55 + 0.25 * ((s * 37) % 10) / 10);
+      var sx = cx + Math.cos(sa) * sr, sy = cy + Math.sin(sa) * sr, tw = 0.5 + 0.5 * Math.sin(t * 0.2 + s);
+      ctx.fillStyle = "rgba(" + cols[s % 5] + "," + (0.5 + 0.5 * tw).toFixed(2) + ")";
+      ctx.beginPath();
+      for (var p2 = 0; p2 < 10; p2++){ var rr = p2 % 2 ? 2.2 : 5.5, pa = p2 * Math.PI / 5 - Math.PI / 2; ctx.lineTo(sx + Math.cos(pa) * rr, sy + Math.sin(pa) * rr); }
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+  function drawQueen(b){
+    var key = queenPose(b), img = QUEEN_SPRITES[key], S = QUEEN_S;
+    var sx = b.x - camX;
+    if (sx < -200 || sx > VW + 200) return;
+    var air = Math.max(0, GROUND_Y - b.y);
+    ctx.fillStyle = "rgba(80,30,80," + Math.max(0.1, 0.3 - air / 600).toFixed(2) + ")";
+    ctx.beginPath(); ctx.ellipse(sx, GROUND_Y + 2, 52 - Math.min(30, air / 8), 7, 0, 0, Math.PI * 2); ctx.fill();
+    if (b.phase2 && b.state !== "dead"){
+      var ag = ctx.createRadialGradient(sx, b.y - 70, 10, sx, b.y - 70, 120);
+      ag.addColorStop(0, "rgba(255,150,220,0.25)"); ag.addColorStop(1, "rgba(255,150,220,0)");
+      ctx.fillStyle = ag; ctx.fillRect(sx - 120, b.y - 190, 240, 220);
+    }
+    if (img && img.ready){
+      var w = img.naturalWidth * S, h = img.naturalHeight * S;
+      var sq = b.squash > 0 ? Math.sin(b.squash / 16 * Math.PI) * 0.12 : 0;   // squish on landing
+      ctx.save();
+      ctx.translate(sx, b.y + 4);
+      var flip = b.facing < 0 && key.indexOf("defeat") !== 0;
+      if (flip) ctx.scale(-1, 1);
+      ctx.scale(1 + sq, 1 - sq);
+      if (b.hitFlash > 0) ctx.filter = "brightness(1.8) saturate(0.6)";
+      ctx.drawImage(img, -w * img.ax, -h, w, h);
+      ctx.restore();
+    }
+    if (b.state === "shield"){
+      var on = Math.min(1, b.t / 8) * Math.min(1, ((b.phase2 ? 100 : 80) - b.t) / 8);
+      drawQueenBubble(sx, b.y - 78, 92 + Math.sin(b.anim * 0.15) * 3, Math.max(0, on), b.anim);
+    }
+  }
+  function drawQueenAttacks(){
+    var img = QUEEN_SPRITES.heart;
+    function heartAt(x, y, rot, s){
+      if (!img || !img.ready){ ctx.fillStyle = "#ff8ad0"; ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.fill(); return; }
+      ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
+      var w = img.naturalWidth * s, h = img.naturalHeight * s;
+      ctx.drawImage(img, -w / 2, -h / 2, w, h); ctx.restore();
+    }
+    for (var i = 0; i < queenHearts.length; i++){
+      var h = queenHearts[i], hx = h.x - camX;
+      for (var k = 1; k <= 4; k++){                     // rainbow trail
+        ctx.fillStyle = "rgba(" + ["255,150,200", "255,220,140", "150,210,255", "210,170,255"][k - 1] + "," + (0.35 - k * 0.07).toFixed(2) + ")";
+        ctx.beginPath(); ctx.arc(hx - h.vx * k * 2.2, h.y - h.vy * k * 2.2, 9 - k, 0, Math.PI * 2); ctx.fill();
+      }
+      heartAt(hx, h.y, Math.sin(h.spin) * 0.3, 1);
+    }
+    for (var j = 0; j < queenRollers.length; j++){
+      var r = queenRollers[j];
+      heartAt(r.x - camX, GROUND_Y - 17, r.spin, 1.05);
+    }
   }
 
   // ---------- Boss: Itay (Itay's Secret Lab) ----------
@@ -5834,7 +6134,7 @@
   function drawBackground(){
     var backdrop = STAGES[stageIndex].backdrop;
     if (backdrop === "frost"){ drawFrostBackdrop(); return; }
-    if (backdrop === "den" || backdrop === "tundra" || backdrop === "village" || STAGES[stageIndex].realm){ drawFrostBackdrop(backdrop); return; }
+    if (backdrop === "den" || backdrop === "tundra" || backdrop === "village" || backdrop === "squishy" || STAGES[stageIndex].realm){ drawFrostBackdrop(backdrop); return; }
     if (backdrop === "lab"){ drawLabBackdrop(); return; }
     if (backdrop && backdrop !== "forest"){
       var bd = BACKDROPS[backdrop];
