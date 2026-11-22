@@ -4427,7 +4427,7 @@
     if (b.kind === "wyrm"){ drawWyrm(b); return; }
     if (b.kind === "wraith"){ drawWraith(b); return; }
     if (b.kind === "itay"){ drawItay(b); if (b.heart) drawTechHeart(b.heart); return; }
-    if (b.kind === "queen"){ drawQueen(b); return; }
+    if (b.kind === "queen"){ drawQueen(b); if (b.heart) drawTechHeart(b.heart); return; }
     var img = BOSS_SPRITES[bossPose(b)];
     var sx = b.x - camX;
     ctx.save();
@@ -4752,6 +4752,10 @@
     QUEEN_SPRITES[f[0]] = loadArt("assets/queen_" + f[0] + ".webp", { ax: f[1] });
   });
   var queenHearts = [], queenRollers = [];
+  // her own heart, left behind when she's beaten: a squishy candy heart
+  var QUEEN_HEART = { beat: [], roll: [] }, QUEEN_HEART_S = 0.6;
+  [0, 1, 2, 3, 4].forEach(function(i){ QUEEN_HEART.beat.push(loadArt("assets/queen_heart_beat" + i + ".webp")); });
+  [0, 1, 2, 3, 4, 5].forEach(function(i){ QUEEN_HEART.roll.push(loadArt("assets/queen_heart_roll" + i + ".webp")); });
 
   function makeQueen(stage){
     return {
@@ -4806,7 +4810,14 @@
     if (b.squash > 0) b.squash = Math.max(0, b.squash - dt);
     updateQueenAttacks(dt, hitbox);
     if (b.state === "dead"){
+      var qBefore = b.dead_t;
       b.dead_t += dt;
+      if (qBefore < 40 && b.dead_t >= 40){                 // as she sits down, her heart pops out and bounces away
+        var qdir = b.x > WORLD_W / 2 ? -1 : 1;
+        b.heart = { x: b.x, y: b.y - 90, vx: qdir * 3.4, vy: -9, state: "fly", t: 0, roll: 0, bounced: false, sweet: true };
+        SFX.play("heal", 0.6); queenSparkles(b.x, b.y - 90, 20, 4);
+      }
+      if (b.heart) updateTechHeart(b, dt);
       if (b.dead_t > 90 && Math.random() < 0.08 * dt) queenSparkles(b.x + (Math.random() - 0.5) * 80, b.y - 60 - Math.random() * 60, 2, 1.5);
       return;
     }
@@ -5364,7 +5375,8 @@
     for (var i = 0; i < n; i++){
       var ang = -Math.PI * Math.random(), sp = 1 + Math.random() * power, life = 20 + Math.random() * 25;
       explosionParticles.push({ x: h.x, y: h.state === "fly" ? h.y : GROUND_Y - 24, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
-        life: life, maxLife: life, size: 1.5 + Math.random() * 2.5, color: ["120,230,255", "255,170,70", "220,250,255"][i % 3] });
+        life: life, maxLife: life, size: 1.5 + Math.random() * 2.5,
+        color: (h.sweet ? ["255,160,220", "255,235,150", "170,220,255"] : ["120,230,255", "255,170,70", "220,250,255"])[i % 3] });
     }
   }
   function updateTechHeart(b, dt){
@@ -5380,7 +5392,7 @@
         h.y = GROUND_Y - 40;
         if (!h.bounced && h.vy > 3){                           // one clanking bounce, then it rolls
           h.bounced = true; h.vy = -h.vy * 0.4; h.state = "roll";
-          SFX.play("slam", near(h.x, GROUND_Y) * 0.5); shake = Math.max(shake, 5);
+          SFX.play(h.sweet ? "jump" : "slam", near(h.x, GROUND_Y) * 0.5); shake = Math.max(shake, h.sweet ? 3 : 5);
           techHeartSparks(h, 12, 3);
         } else {
           h.vy = 0; h.state = "roll";
@@ -5397,7 +5409,7 @@
       h.state = "taken"; h.t = 0;
       SFX.play("heal");
       player.hp = player.maxHp;                                 // like the golem's and the wyrm's: a full flask
-      if (!player.hasForceField){ player.hasForceField = true; abilityCard = { state: "pending", t: 0, kind: "field" }; }   // ...and the force field, every third kill
+      if (!h.sweet && !player.hasForceField){ player.hasForceField = true; abilityCard = { state: "pending", t: 0, kind: "field" }; }   // Itay's: ...and the force field, every third kill
       player.invuln = Math.max(player.invuln, 30);
       shake = Math.max(shake, 8);
       techHeartSparks(h, 40, 6);
@@ -5407,11 +5419,12 @@
     var sx = h.x - camX;
     if (sx < -80 || sx > VW + 80) return;
     var img, s = 1;
-    if (h.state === "fly" || h.state === "roll") img = TECH_HEART.roll[Math.floor(h.roll) % TECH_HEART.roll.length];
+    var frames = h.sweet ? QUEEN_HEART : TECH_HEART;
+    if (h.state === "fly" || h.state === "roll") img = frames.roll[Math.floor(h.roll) % frames.roll.length];
     else {
       var ph = h.state === "rest" ? h.t % 60 : 0;
       // five-frame beat at the start of each cycle, then rest on the first frame
-      img = TECH_HEART.beat[ph < 25 ? Math.floor(ph / 5) : 0];
+      img = frames.beat[ph < 25 ? Math.floor(ph / 5) : 0];
       if (h.state === "rest" && ph < 10) s = 1 + 0.06 * Math.sin(ph / 10 * Math.PI);
     }
     var cy = h.state === "fly" || h.state === "roll" ? h.y : GROUND_Y - 38;
@@ -5420,12 +5433,12 @@
     var glow = h.state === "rest" ? 0.35 + 0.35 * Math.max(0, 1 - (h.t % 60) / 20) : h.state === "taken" ? 0 : 0.3;
     if (glow > 0){
       var g = ctx.createRadialGradient(sx, cy, 4, sx, cy, 75);
-      g.addColorStop(0, "rgba(110,220,255," + glow.toFixed(2) + ")");
-      g.addColorStop(1, "rgba(60,150,255,0)");
+      g.addColorStop(0, (h.sweet ? "rgba(255,200,235," : "rgba(110,220,255,") + glow.toFixed(2) + ")");
+      g.addColorStop(1, h.sweet ? "rgba(255,170,220,0)" : "rgba(60,150,255,0)");
       ctx.fillStyle = g; ctx.fillRect(sx - 75, cy - 75, 150, 150);
     }
     if (img && img.ready){
-      var S = TECH_HEART_S * s * (h.state === "taken" ? 1 + h.t / 40 * 0.6 : 1);
+      var S = (h.sweet ? QUEEN_HEART_S : TECH_HEART_S) * s * (h.state === "taken" ? 1 + h.t / 40 * 0.6 : 1);
       var w = img.naturalWidth * S, hh = img.naturalHeight * S;
       if (h.state === "taken") ctx.globalAlpha = Math.max(0, 1 - h.t / 40);
       // sits on the floor; centred while it tumbles
@@ -5437,11 +5450,12 @@
       ctx.save();
       ctx.globalAlpha = Math.max(0, 1 - h.t / 40);
       ctx.textAlign = "center";
-      ctx.fillStyle = "#d4f6ff";
-      ctx.shadowColor = "rgba(60,190,255,0.9)";
+      ctx.fillStyle = h.sweet ? "#ffe0f4" : "#d4f6ff";
+      ctx.shadowColor = h.sweet ? "rgba(255,110,200,0.9)" : "rgba(60,190,255,0.9)";
       ctx.shadowBlur = 10;
       ctx.font = "12px 'Press Start 2P', monospace";
       ctx.fillText("FULL HEALTH", sx, GROUND_Y - 110 - h.t * 0.8);
+      if (h.sweet){ ctx.restore(); return; }
       ctx.fillStyle = "#e6c8ff"; ctx.shadowColor = "rgba(170,90,255,0.9)";
       ctx.fillText("FORCE FIELD", sx, GROUND_Y - 88 - h.t * 0.8);
       ctx.font = "8px 'Press Start 2P', monospace";
