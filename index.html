@@ -173,6 +173,24 @@
   button.textbtn.armed{ color:#ffb27a; border-color:#ff7a1f; }
   .pausepanel .hint{ font-size:11px; color:#8a6a55; margin:14px 0 0; }
   .mapbtn[hidden]{ display:none; }
+  /* full screen on a computer: the button (and F) puts just the game on the
+     whole screen, letterboxed to keep its 16:9 shape */
+  .fsbtn{ right:calc(12.5% - 84px); display:flex; align-items:center; justify-content:center; }
+  .fsbtn .fs-out{ display:none; }
+  .stage:fullscreen .fsbtn .fs-in{ display:none; }
+  .stage:fullscreen .fsbtn .fs-out{ display:block; }
+  html.touch .fsbtn{ display:none; }          /* phones go full screen by themselves */
+  html.cutscene .fsbtn{ visibility:visible; }
+  .stage:fullscreen{ width:100vw; height:100vh; max-width:none; aspect-ratio:auto; border-radius:0; background:#000; }
+  .stage:fullscreen{ --cw:min(100vw, calc(100vh * 16 / 9)); --ch:min(100vh, calc(100vw * 9 / 16));
+    --ox:calc((100vw - var(--cw)) / 2); --oy:calc((100vh - var(--ch)) / 2); }
+  .stage:fullscreen #game{ position:absolute; left:var(--ox); top:var(--oy); width:var(--cw); height:var(--ch); }
+  /* keep the round buttons on the picture, not in the black bars */
+  .stage:fullscreen .mutebtn{ top:calc(var(--oy) + var(--ch) * 0.03); right:calc(var(--ox) + var(--cw) * 0.125); }
+  .stage:fullscreen .godbtn{ right:calc(var(--ox) + var(--cw) * 0.125 + 42px); }
+  .stage:fullscreen .mapbtn{ right:calc(var(--ox) + var(--cw) * 0.125 + 84px); }
+  .stage:fullscreen .pausebtn{ right:calc(var(--ox) + var(--cw) * 0.125 - 42px); }
+  .stage:fullscreen .fsbtn{ right:calc(var(--ox) + var(--cw) * 0.125 - 84px); }
   /* TESTING ONLY: god mode toggle, remove for the final version */
   .godbtn{ right:calc(12.5% + 42px); font:bold 10px/32px 'IBM Plex Mono', monospace; letter-spacing:0.5px; }
   .godbtn.on{ background:rgba(230,170,40,0.9); color:#1a0e00; border-color:#ffe08a; box-shadow:0 0 10px rgba(255,200,80,0.8); }
@@ -472,6 +490,10 @@
       <button class="mutebtn godbtn" id="godBtn" type="button" aria-label="Toggle god mode">GOD</button>
       <button class="mutebtn pausebtn" id="pauseBtn" type="button" aria-label="Pause">&#10074;&#10074;</button>
       <button class="mutebtn mapbtn" id="mapBtn" type="button" aria-label="World map" hidden>&#128506;</button>
+      <button class="mutebtn fsbtn" id="fsBtn" type="button" aria-label="Full screen" title="Full screen (F)">
+        <svg class="fs-in" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M1 6V1h5M10 1h5v5M15 10v5h-5M6 15H1v-5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        <svg class="fs-out" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M6 1v5H1M15 6h-5V1M10 15v-5h5M1 10h5v5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+      </button>
       <div class="overlay title" id="overlay">
         <div class="panel">
           <h2 id="overlayTitle">DEMONIC FLAME</h2>
@@ -533,6 +555,7 @@
     <div class="ctrl"><span class="key">M</span> map (once found)</div>
     <div class="ctrl"><span class="key">N</span> mute</div>
     <div class="ctrl"><span class="key">P</span> pause</div>
+    <div class="ctrl"><span class="key">F</span> full screen</div>
   </div>
 </div>
 
@@ -3374,6 +3397,7 @@
       triggerSuperMode();
     }
     if (code === "KeyM") toggleMap();
+    if (code === "KeyF" && !root.classList.contains("touch")) toggleFullscreen();
     if (code === "ShiftLeft" || code === "ShiftRight" || code === "KeyC") tryDash();
     if (code === "Escape" && mapOpen) toggleMap();
     else if (code === "KeyP" || code === "Escape") togglePause();
@@ -3454,6 +3478,17 @@
 
   // On phones, try to go full screen and lock to landscape when the game
   // starts. Android browsers allow this; iPhone Safari does not, which is fine.
+  // Full screen on a computer: just the game (the stage) fills the screen.
+  var stageEl = document.querySelector(".stage");
+  function toggleFullscreen(){
+    try {
+      if (document.fullscreenElement){ document.exitFullscreen(); }
+      else if (stageEl.requestFullscreen){ var pr = stageEl.requestFullscreen({ navigationUI: "hide" }); if (pr && pr.catch) pr.catch(function(){}); }
+      else if (stageEl.webkitRequestFullscreen){ stageEl.webkitRequestFullscreen(); }
+    } catch(e) {}
+    canvas.focus();
+  }
+  document.getElementById("fsBtn").addEventListener("click", function(e){ e.stopPropagation(); toggleFullscreen(); });
   function goFullscreenOnTouch(){
     if (!root.classList.contains("touch")) return;
     try {

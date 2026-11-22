@@ -70,6 +70,7 @@ No build step — it's a static page. Either:
 - **Space** — attack
 - **X** — once you've defeated 4+ imps, ignite into the fire-elemental form for 8 seconds (runs much faster on the ground, though in mid-air you move at normal speed unless you dash; simply touching an enemy kills it instantly with no damage taken). A flame bar over your head burns down as it goes; in the last 2 seconds it turns red and blinks, you flicker and it sizzles, faster in the final second. When the timer runs out you revert to normal and the imp counter resets to 0.
 - **R** — restart after game over or a win
+- **F** (or the corner button at the top right) — full screen on a computer: just the game fills the screen, keeping its shape with black bars if needed; F or Esc goes back. Phones go full screen by themselves when the game starts.
 - **Phones / tablets** — on-screen buttons appear automatically on touch screens
 
 ## Project structure
