@@ -1678,6 +1678,7 @@
       exitTop: { y: 50, to: 6, x0: 780, x1: 960 },   // jumping up off that ledge climbs into The Chute
       boss: "wyrm",
       arenaX: 1420,                 // walking past this wakes the wyrm
+      arenaWall: [1200, 1320],      // ...and an ice wall rises out of this pit behind you until it's dead
       width: 2600,
       ground: [[0, 600], [720, 1200], [1320, 2600]],
       platforms: [
@@ -3866,6 +3867,8 @@
     var throughWall = lwall && player.wallGone && player.y + player.h > WALL_GAP_TOP;   // where the lower part was
     if (throughWall && player.x <= 0 && player.vx < 0){ loadStage(lwall.breakTo, "right"); return; }
     if (lwall && !throughWall && player.x < lwall.edge){ player.x = lwall.edge; if (player.vx < 0) player.vx = 0; }
+    var aw = STAGES[stageIndex].arenaWall;
+    if (aw && arenaWallUp() && player.x < aw[1] + 6){ player.x = aw[1] + 6; if (player.vx < 0) player.vx = 0; }
     if (player.x + player.w > WORLD_W) player.x = WORLD_W - player.w;
 
     // Fell down the shaft pit: drop into the stage below.
@@ -5175,6 +5178,7 @@
   function updateWyrm(dt, hitbox){
     var b = boss;
     b.anim += dt;
+    updateArenaWall(b, dt);
     if (b.hitFlash > 0) b.hitFlash -= dt;
     if (b.invuln > 0) b.invuln -= dt;
     updateIcicles(dt);
@@ -5200,7 +5204,7 @@
     switch (b.state){
       case "waiting":
         b.y = WYRM_HOVER - 70 + Math.sin(b.anim * 0.04) * 6;
-        if (player.x > b.arenaX){ wyrmState(b, "intro"); shake = 12; }
+        if (player.x > b.arenaX){ wyrmState(b, "intro"); shake = 12; if (STAGES[stageIndex].arenaWall) b.wall = { state: "rise", t: 0, frame: 0 }; }
         break;
       case "intro":
         faceP();
@@ -6753,6 +6757,7 @@
       allPlatforms.forEach(drawPlatform);
     }
     drawProps();
+    drawArenaWall();
     drawSummit();
     drawFinishGate();
     drawMapItem();
@@ -7025,6 +7030,66 @@
     fade.addColorStop(0, "rgba(0,0,0,0)"); fade.addColorStop(1, "rgba(0,0,0,1)");
     g.fillStyle = fade; g.fillRect(0, c.height * 0.72, c.width, c.height * 0.28);
     return (iceWallFeather = c);
+  }
+  // The Frost Wyrm's arena: when it wakes, an ice wall (the same cliff art)
+  // rises out of the pit behind you so you can't run. Once the wyrm is dead
+  // it cracks through ice_wall_2..5 and melts away.
+  // two stacked pieces of the cliff (so it reaches the top of the screen
+  // without getting wider); each crack phase holds for AW_STEP frames
+  var AW_RISE = 40, AW_STEP = 26, AW_HOLD = 30, AW_FADE = 36, AW_H = 320, AW_PIECES = 2;
+  function arenaWallUp(){ return !!(boss && boss.wall && boss.wall.state !== "gone"); }
+  function arenaWallSparks(x, y, n, power){
+    for (var i = 0; i < n; i++){
+      var ang = Math.random() * Math.PI * 2, sp = 1 + Math.random() * power, life = 20 + Math.random() * 26;
+      explosionParticles.push({ x: x + (Math.random() - 0.5) * 120, y: y + (Math.random() - 0.5) * 160, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 1.5,
+        life: life, maxLife: life, size: 1.5 + Math.random() * 3, color: ["235,250,255", "160,220,255", "110,170,220"][i % 3] });
+    }
+  }
+  function updateArenaWall(b, dt){
+    var w = b.wall, aw = STAGES[stageIndex].arenaWall;
+    if (!w || !aw || w.state === "gone") return;
+    var cx = (aw[0] + aw[1]) / 2;
+    w.t += dt;
+    if (w.state === "rise"){
+      if (Math.random() < 0.6 * dt) arenaWallSparks(cx, GROUND_Y - 20, 2, 2);
+      if (w.t >= AW_RISE){ w.state = "up"; w.t = 0; SFX.play("slam"); shake = Math.max(shake, 12); buzz(60); arenaWallSparks(cx, GROUND_Y - 120, 24, 4); }
+    }
+    if ((w.state === "rise" || w.state === "up") && b.state === "dead" && b.dead_t >= 80){ w.state = "break"; w.t = 0; }
+    if (w.state === "break"){
+      var f = Math.min(ICE_WALL.length - 1, 1 + Math.floor(w.t / AW_STEP));
+      if (f !== w.frame){
+        w.frame = f; playIceBreak(); shake = Math.max(shake, f === ICE_WALL.length - 1 ? 14 : 6);
+        arenaWallSparks(cx, GROUND_Y - 160, f === ICE_WALL.length - 1 ? 40 : 14, f === ICE_WALL.length - 1 ? 6 : 3);
+      }
+      if (w.t > (ICE_WALL.length - 2) * AW_STEP + AW_HOLD + AW_FADE) w.state = "gone";
+    }
+  }
+  function drawArenaWall(){
+    var aw = STAGES[stageIndex].arenaWall, w = boss && boss.wall;
+    if (!aw || !w || w.state === "gone") return;
+    var a = ICE_WALL[w.frame] || ICE_WALL[0];
+    if (!a.ready) a = ICE_WALL[0];
+    if (!a.ready) return;
+    // the middle of the cliff art, where the cracks run
+    var sx0 = a.naturalWidth * 0.28, sw = a.naturalWidth * 0.44, k = AW_H / a.naturalHeight, dw = sw * k;
+    var cx = (aw[0] + aw[1]) / 2 - camX;
+    if (cx + dw < 0 || cx - dw > VW) return;
+    var rise = w.state === "rise" ? 1 - Math.pow(1 - Math.min(1, w.t / AW_RISE), 3) : 1;
+    var fullH = AW_H * AW_PIECES - 40 * (AW_PIECES - 1);
+    var top = GROUND_Y + 70 - fullH * rise;
+    var alpha = 1;
+    if (w.state === "break"){
+      var fadeFrom = (ICE_WALL.length - 2) * AW_STEP + AW_HOLD;
+      if (w.t > fadeFrom) alpha = Math.max(0, 1 - (w.t - fadeFrom) / AW_FADE);
+    }
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.beginPath(); ctx.rect(cx - dw, -2000, dw * 2, GROUND_Y + 70 + 2000); ctx.clip();   // comes up out of the pit
+    // top piece first, so the lower one's snowy cap sits over the seam
+    for (var pc = 0; pc < AW_PIECES; pc++){
+      ctx.drawImage(a, sx0, 0, sw, a.naturalHeight, cx - dw / 2, top + pc * (AW_H - 40), dw, AW_H);
+    }
+    ctx.restore();
   }
   function drawLeftWall(){
     var lw = STAGES[stageIndex].leftWall, a = ICE_WALL[0];
