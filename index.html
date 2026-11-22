@@ -1710,8 +1710,8 @@
       width: 1800,
       topY: -540,                   // room above the secret ledge so its portal shows in full
       mapItem: [205, -290],         // the world map scroll: x, top of the ledge it sits on
-      potion: [1635, -250],         // max-life flask on the secret ledge
-      portal: { x: 1700, y: -250, to: 9 },   // the portal into the shadow realm, beside it
+      potion: [1655, -250],         // max-life flask on the secret ledge
+      portal: { x: 1715, y: -250, to: 9 },   // the portal into the shadow realm, beside it
       leftWall: { edge: 150, breakTo: 13 },  // an icicled cliff face closes off the west side;
                                     // its lower part cracks under your blade and opens into Itay's Secret Lab
       ground: [[0, 1800]],
@@ -1720,7 +1720,7 @@
         [620, 10, 140], [400, -80, 140], [180, -180, 140],
         [40, -290, 200],                                      // top left: the map
         [1450, 140, 120], [1200, -60, 120],
-        [1600, -250, 190]   // secret ledge, top right: double jump off [1200,-60], then dash in mid-air
+        [1625, -250, 170]   // secret ledge, top right: double jump off [1200,-60], then dash in mid-air (a 305 px gap)
       ],
       enemies: [
         [900, 200, 1700, 0.9, 444],      // floor
@@ -2781,6 +2781,7 @@
   var MOVE_SPEED = 4.2;
   var SUPER_SPEED_MULT = 2.1; // fire-elemental form moves much faster
   var SUPER_MODE_DURATION = 8 * 60;  // fire form lasts 8 real seconds (dt ~ 1 per frame @60fps)
+  var FIRE_WARN = 2 * 60;            // its last 2 seconds: the timer turns red and the hero flickers
   var JUMP_V = -13.2;
   // Dash (granted by the Frost Wyrm's frozen heart): Shift / C / the DASH
   // button. A short flat burst the way you face; you pass through enemies
@@ -3809,7 +3810,9 @@
     var left = keys.ArrowLeft || keys.KeyA;
     var right = keys.ArrowRight || keys.KeyD;
 
-    var curSpeed = player.superMode ? MOVE_SPEED * SUPER_SPEED_MULT : MOVE_SPEED;
+    // fire form's extra speed is a ground thing: in the air you move at normal
+    // speed (unless you dash), so it can't stand in for the dash on long gaps
+    var curSpeed = player.superMode && player.onGround ? MOVE_SPEED * SUPER_SPEED_MULT : MOVE_SPEED;
     if (left && !right){ player.vx = -curSpeed; player.facing = -1; }
     else if (right && !left){ player.vx = curSpeed; player.facing = 1; }
     else player.vx = 0;
@@ -3919,7 +3922,12 @@
     updateExplosionFx(dt);
 
     if (player.superMode){
+      var ftBefore = player.superTimer;
       player.superTimer -= dt;
+      // running out: a sizzle every half second in the last 2 s, faster in the last 1 s
+      var tickGap = player.superTimer < 60 ? 15 : 30;
+      if (player.superTimer > 0 && player.superTimer < FIRE_WARN && Math.floor(ftBefore / tickGap) !== Math.floor(player.superTimer / tickGap))
+        SFX.play("sizzle", 0.45);
       if (player.superTimer <= 0){
         player.superMode = false;
         player.superTimer = 0;
@@ -4564,6 +4572,31 @@
     draw(u);
     forcedFilter = ""; ctx.filter = "none";
   }
+  // Fire form: a flame bar over the hero's head that burns down over its 8
+  // seconds, turning red and blinking for the last 2
+  function drawFireTimer(){
+    if (!player || !player.superMode || player.superTimer <= 0) return;
+    var im = PLAYER_SPRITES.idle, footY = player.y + player.h, top = player.y - 30;
+    if (im && im.ready) top = footY + (im.padB || 0) / 2 - PLAYER_FOOT_LIFT - im.naturalHeight / 2;
+    var k = Math.max(0, Math.min(1, player.superTimer / SUPER_MODE_DURATION));
+    var warn = player.superTimer < FIRE_WARN, on = !warn || Math.floor(player.superTimer / (player.superTimer < 60 ? 4 : 7)) % 2 === 0;
+    var w = 54, h = 7, x = player.x + player.w / 2 - camX - w / 2, y = top - 14;
+    ctx.save();
+    roundRect(x - 2, y - 2, w + 4, h + 4, 4);
+    ctx.fillStyle = "rgba(20,8,4,0.75)"; ctx.fill();
+    if (on || !warn){
+      var g = ctx.createLinearGradient(x, 0, x + w, 0);
+      if (warn){ g.addColorStop(0, "#ff2a12"); g.addColorStop(1, "#ffd0b0"); }
+      else { g.addColorStop(0, "#ff5a14"); g.addColorStop(1, "#ffd36a"); }
+      ctx.fillStyle = g;
+      if (k > 0){ roundRect(x, y, Math.max(3, w * k), h, 3); ctx.fill(); }
+      ctx.shadowColor = warn ? "rgba(255,60,30,0.9)" : "rgba(255,150,40,0.8)"; ctx.shadowBlur = 8;
+      ctx.strokeStyle = warn ? "rgba(255,200,180,0.9)" : "rgba(255,210,140,0.7)"; ctx.lineWidth = 1;
+      roundRect(x - 2, y - 2, w + 4, h + 4, 4); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function drawForceField(){
     if (!fieldOn()) return;
     var c = fieldCentre(), sx = c.x - camX, t = timeAlive;
@@ -6381,7 +6414,8 @@
 
   function drawPlayer(){
     var sx = player.x - camX;
-    var blink = player.invuln > 0 && player.invuln <= 50 && Math.floor(player.invuln/4) % 2 === 0;
+    var blink = (player.invuln > 0 && player.invuln <= 50 && Math.floor(player.invuln/4) % 2 === 0) ||
+      (player.superMode && player.superTimer < FIRE_WARN && Math.floor(player.superTimer / (player.superTimer < 60 ? 4 : 7)) % 2 === 0);   // fire form running out
     var key = transformKey() || pickPlayerSpriteKey();
     var human = player.human && !player.superMode;
     var spriteSet = player.superMode ? FIRE_SPRITES : human ? HUMAN_SPRITES : PLAYER_SPRITES;
@@ -6769,6 +6803,7 @@
     drawIceHeart();
     if (gameState !== "start") drawPlayer();
     if (gameState !== "start") drawForceField();
+    if (gameState !== "start") drawFireTimer();
     drawZaps();
     drawBossAttacks();
     drawExplosionFx();
