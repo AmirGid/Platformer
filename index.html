@@ -1034,7 +1034,7 @@
    // the same lab with its east door half shut and shut (Itay's fight locks it)
    ["lab_mid", "assets/lab_door_mid.jpg", 1.12, 0.22, "4,8,14"],
    ["lab_closed", "assets/lab_door_closed.jpg", 1.12, 0.22, "4,8,14"],
-   // Agam's Squishy Forest: bright pastel, barely dimmed
+   // Agam's squishy forest: bright pastel, barely dimmed
    ["squishy", "assets/squishy_background.jpg", 1.12, 0.06, "60,20,70"]].forEach(function(d){
     var im = new Image();
     var entry = { img: im, ready: false, w: 0, h: 0, dim: d[3], frost: !d[4], dimRGB: d[4] };
@@ -1206,7 +1206,7 @@
     // Itay's Secret Lab's machine decks: a long railed one (ground) and a short one (ledges)
     lab_long: loadArt("assets/plat_lab_long.png", { top: 0.28, mid: [0.55, 0.72], th: 230 }),
     lab_deck: loadArt("assets/plat_lab_deck.png", { top: 0.16 }),
-    // Agam's Squishy Forest: a floating island of cushion tiles (ground repeats its middle)
+    // Agam's squishy forest: a floating island of cushion tiles (ground repeats its middle)
     squishy: loadArt("assets/plat_squishy.webp", { top: 0.06, mid: [0.3, 0.7], th: 190 })
   };
   // which pieces each realm stage builds with: ledges cycle through the list
@@ -1916,9 +1916,9 @@
     },
     {
       // SECRET: past Cinder Cliffs' east end, over the top of the old tree:
-      // Agam's Squishy Forest, a pastel wood of cushion paths and poodles,
+      // Agam's squishy forest, a pastel wood of cushion paths and poodles,
       // where the Squishy Queen holds court.
-      name: "Agam's Squishy Forest",
+      name: "Agam's squishy forest",
       kicker: "SECRET",
       exits: { left: 5 },
       backdrop: "squishy",
@@ -3279,7 +3279,7 @@
     "boss": { x: 130, y: 64,  w: 112, h: 96, name: "Molten Core",   color: "#7a3410" },
     "8":    { x: 0,   y: 104, w: 112, h: 56, name: "Frozen Den",    color: "#2f6080" },
     "13":   { x: -130, y: 104, w: 112, h: 56, name: "Itay's Secret Lab", color: "#24506e" },
-    "14":   { x: 520, y: 0,   w: 112, h: 56, name: "Squishy Forest", color: "#a0508a" },
+    "14":   { x: 520, y: 0,   w: 112, h: 56, name: "Agam's squishy forest", color: "#a0508a" },
     "6":    { x: 429, y: 64,  w: 34,  h: 32, name: "",              color: "#3a1a44" },
     "7":    { x: 390, y: 104, w: 112, h: 56, name: "Obsidian Gate", color: "#2f5a7a" },
     // the shadow realm, reached only through the Frozen Den's portal:
@@ -4729,7 +4729,7 @@
     ctx.restore();
   }
 
-  // ---------- Boss: the Squishy Queen (Agam's Squishy Forest) ----------
+  // ---------- Boss: the Squishy Queen (Agam's squishy forest) ----------
   // A little queen in a puffy rainbow gown, with her pink poodle. She walks
   // you down and picks from three moves:
   //   throw  - winds up and throws a bouncy rainbow heart at you (three in a
