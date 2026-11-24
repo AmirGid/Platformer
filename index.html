@@ -415,6 +415,9 @@
   .tbtn-dash{ visibility:hidden; margin-bottom:60px; width:62px; height:62px; border-color:#b48cff;
     background:radial-gradient(circle at 50% 35%, rgba(60,40,90,0.8), rgba(14,8,24,0.8)); }
   .tbtn-dash.ready{ visibility:visible; }
+  /* appears only while you stand at a doorway you can go down into */
+  .tbtn-down{ display:none; border-color:#9fe4ff; animation:btnPulse 1.2s ease-in-out infinite; }
+  .tbtn-down.ready{ display:flex; }
 
   /* Portrait: game on top, buttons underneath, plus a hint to rotate. */
   @media (orientation: portrait){
@@ -536,6 +539,7 @@
     <div class="pad-cluster pad-left">
       <div class="tbtn" data-key="ArrowLeft">&#9664;</div>
       <div class="tbtn" data-key="ArrowRight">&#9654;</div>
+      <div class="tbtn tbtn-down" data-key="ArrowDown" id="downBtn">&#9660;</div>
     </div>
     <div class="pad-cluster pad-right">
       <div class="tbtn tbtn-ignite" data-key="KeyX" id="igniteBtn"><small>FIRE</small></div>
@@ -556,6 +560,7 @@
     <div class="ctrl"><span class="key">N</span> mute</div>
     <div class="ctrl"><span class="key">P</span> pause</div>
     <div class="ctrl"><span class="key">F</span> full screen</div>
+    <div class="ctrl"><span class="key">&#8595;</span> go through a doorway</div>
   </div>
 </div>
 
@@ -2013,6 +2018,8 @@
       exitTop: { y: 40, to: 16, x0: 500, x1: 625 },
       summit: [509, 155, 109],      // beam of light over the way back up
       respawn: { x: 545, y: 155 },
+      door: { x0: 160, x1: 285, to: 18 },   // the black cave mouth on the tunnel floor: press Down to go in
+      doorIn: 225,
       fallTitle: "YOU FELL", fallText: "The chasm swallowed you.",
       width: 1039,
       ground: [[0, 430]],           // the tunnel floor with the mushrooms
@@ -2023,6 +2030,30 @@
         [447, 173, 44], [509, 155, 109], [629, 186, 52], [702, 199, 93],     // floating rocks
         [837, 186, 202]                                                      // mossy ledge, far right
       ],
+      enemies: []
+    },
+    {
+      // Through the black cave mouth in the Root Hollow. Empty for now; the
+      // doorway you came in by (press Down again) leads back out, and the
+      // east end runs on into the Deep Tunnels.
+      name: "Dark Burrow",
+      exits: { right: 19 },
+      backdrop: "depths",
+      width: 1200,
+      ground: [[0, 1200]],
+      door: { x0: 60, x1: 190, to: 17 },
+      doorIn: 125,
+      platforms: [],
+      enemies: []
+    },
+    {
+      // East of the Dark Burrow. Empty for now; walk back west to the Burrow.
+      name: "Deep Tunnels",
+      exits: { left: 18 },
+      backdrop: "depths",
+      width: 1400,
+      ground: [[0, 1400]],
+      platforms: [],
       enemies: []
     }
   ];
@@ -3066,6 +3097,9 @@
       if (!portalShut) arrivalT = 0;
       shake = Math.max(shake, 8);
       explosionFlash = { x: player.x + player.w/2, y: GROUND_Y - 80, t: 0, maxT: 26 };
+    } else if (from === "door"){
+      player.x = (stage.doorIn || 120) - player.w / 2;
+      player.facing = 1;
     } else if (from === "below"){
       // climbed up out of the stage below: hop up out of the drop pit
       player.x = stage.entryBelowX || 40;
@@ -3373,6 +3407,8 @@
     "15":   { x: 260, y: 104, w: 112, h: 56, name: "Glacier Falls", color: "#3f7898" },
     "16":   { x: 260, y: 174, w: 112, h: 56, name: "Frozen Depths", color: "#5a3a22" },
     "17":   { x: 260, y: 244, w: 112, h: 56, name: "Root Hollow",   color: "#3e2a1c" },
+    "18":   { x: 260, y: 314, w: 112, h: 56, name: "Dark Burrow",   color: "#2a1e18" },
+    "19":   { x: 390, y: 314, w: 112, h: 56, name: "Deep Tunnels",  color: "#33241a" },
     "6":    { x: 429, y: 64,  w: 34,  h: 32, name: "",              color: "#3a1a44" },
     "7":    { x: 390, y: 104, w: 112, h: 56, name: "Obsidian Gate", color: "#2f5a7a" },
     // the shadow realm, reached only through the Frozen Den's portal:
@@ -3384,7 +3420,7 @@
   // doors between rooms: [roomA, roomB, x, y, vertical]
   var MAP_DOORS = [
     ["12", "0", -9, 28, false], ["0", "1", 121, 28, false], ["1", "4", 251, 28, false], ["4", "5", 381, 28, false],
-    ["1", "boss", 186, 60, true], ["8", "boss", 121, 132, false], ["13", "8", -9, 132, false], ["5", "14", 511, 14, false], ["15", "7", 381, 132, false], ["15", "16", 316, 170, true], ["16", "17", 316, 240, true],
+    ["1", "boss", 186, 60, true], ["8", "boss", 121, 132, false], ["13", "8", -9, 132, false], ["5", "14", 511, 14, false], ["15", "7", 381, 132, false], ["15", "16", 316, 170, true], ["16", "17", 316, 240, true], ["17", "18", 316, 310, true], ["18", "19", 381, 342, false],
     ["5", "6", 446, 60, true], ["6", "7", 446, 100, true],
     ["9", "10", 816, -172, true], ["10", "11", 881, -222, false]
   ];
@@ -3510,7 +3546,8 @@
 
   // ---------- Input ----------
   var keys = {};
-  var WATCHED = ["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Space","KeyA","KeyD","KeyR","KeyX","ShiftLeft","ShiftRight","KeyC"];
+  var downTapped = false;
+  var WATCHED = ["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","KeyS","Space","KeyA","KeyD","KeyR","KeyX","ShiftLeft","ShiftRight","KeyC"];
 
   // Shared by the keyboard and the on-screen touch buttons.
   function pressKey(code){
@@ -3519,6 +3556,7 @@
     if (cutscene){ if (code === "Escape" || code === "Enter" || code === "Space") endEnding(); return; }
     if (transformT >= 0 && gameState === "playing") return;   // hold still while changing
     keys[code] = true;
+    if (code === "ArrowDown" || code === "KeyS") downTapped = true;   // caught even if released before the next frame
     if (code === "KeyR" && (gameState === "gameover" || gameState === "win")) {
       startGame();
     }
@@ -3637,10 +3675,13 @@
     } catch(e) {}
   }
 
-  var igniteShown = false, dashShown = false;
+  var igniteShown = false, dashShown = false, downShown = false;
+  var downBtn = document.getElementById("downBtn");
   function updateTouchUi(){
     var canDash = gameState === "playing" && !!player.canDash;
     if (canDash !== dashShown){ dashShown = canDash; dashBtn.classList.toggle("ready", canDash); }
+    var canDown = gameState === "playing" && !!atDoor();
+    if (canDown !== downShown){ downShown = canDown; downBtn.classList.toggle("ready", canDown); }
     var ready = gameState === "playing" && !player.superMode && score >= 4;
     if (ready !== igniteShown){
       igniteShown = ready;
@@ -3971,6 +4012,52 @@
     } else e.onSlope = false;
   }
 
+  // Doorways: stand in front of one (stage.door: { x0, x1, to }) and press
+  // Down (or S, or the ▼ button on touch screens) to go through to stage "to",
+  // arriving at its doorIn x. A pulsing ▼ marks the spot.
+  function atDoor(){
+    var d = STAGES[stageIndex].door;
+    if (!d || !player || !player.onGround) return null;
+    var cx = player.x + player.w / 2;
+    return cx >= d.x0 && cx <= d.x1 && player.y + player.h >= GROUND_Y - 4 ? d : null;
+  }
+  function drawDoorHint(){
+    var d = STAGES[stageIndex].door;
+    if (!d || gameState === "start") return;
+    var cx = (d.x0 + d.x1) / 2 - camX, here = !!atDoor(), t = timeAlive;
+    var pulse = 0.5 + 0.5 * Math.sin(t * 0.08);
+    // a faint glow in the doorway, always, so it reads as a way in
+    var gy = GROUND_Y - 70;
+    var g = ctx.createRadialGradient(cx, gy, 4, cx, gy, 70);
+    g.addColorStop(0, "rgba(150,220,255," + ((here ? 0.28 : 0.12) + 0.08 * pulse).toFixed(2) + ")");
+    g.addColorStop(1, "rgba(120,200,255,0)");
+    ctx.fillStyle = g; ctx.fillRect(cx - 70, gy - 70, 140, 140);
+    // bobbing down-chevrons in the doorway
+    var bob = 4 * Math.sin(t * 0.1);
+    ctx.save();
+    ctx.strokeStyle = "rgba(200,240,255," + ((here ? 0.9 : 0.45) * (0.6 + 0.4 * pulse)).toFixed(2) + ")";
+    ctx.lineWidth = 3; ctx.lineCap = "round";
+    for (var c = 0; c < 2; c++){
+      var y = GROUND_Y - 92 + c * 13 + bob;
+      ctx.beginPath(); ctx.moveTo(cx - 11, y); ctx.lineTo(cx, y + 9); ctx.lineTo(cx + 11, y); ctx.stroke();
+    }
+    ctx.restore();
+    // standing at it: a key prompt over your head
+    if (here){
+      var px = player.x + player.w / 2 - camX, py = player.y - 64 + 2 * Math.sin(t * 0.12);
+      var touch = root.classList.contains("touch"), label = touch ? "\u25BC ENTER" : "\u2193 ENTER";
+      ctx.save();
+      ctx.font = "10px 'Press Start 2P', monospace";
+      var w = ctx.measureText(label).width + 18;
+      roundRect(px - w / 2, py - 14, w, 22, 6);
+      ctx.fillStyle = "rgba(8,16,26,0.85)"; ctx.fill();
+      ctx.strokeStyle = "rgba(160,225,255,0.9)"; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = "#dff6ff"; ctx.textAlign = "center";
+      ctx.fillText(label, px, py + 2);
+      ctx.restore();
+    }
+  }
+
   // ---------- Update ----------
   function update(dt){
     if (gameState !== "playing") return;
@@ -4042,6 +4129,15 @@
 
     moveAndCollide(player, allPlatforms);
     landOnSlope(player);
+    var downNow = !!(keys.ArrowDown || keys.KeyS), dr = atDoor(), tapped = downTapped;
+    downTapped = false;
+    if (dr && (tapped || (downNow && !player.downHeld)) && gameState === "playing"){
+      player.downHeld = true;
+      SFX.play("stage", 0.7);
+      loadStage(dr.to, "door");
+      return;
+    }
+    player.downHeld = downNow;
 
     // Walking off an edge that has an exit moves to that stage.
     var exits = STAGES[stageIndex].exits || {};
@@ -7311,6 +7407,7 @@
     drawShocked(boss, function(){ drawBoss(); });
     drawHeart();
     drawIceHeart();
+    drawDoorHint();
     if (gameState !== "start") drawPlayer();
     if (gameState !== "start") drawForceField();
     if (gameState !== "start") drawFireTimer();
