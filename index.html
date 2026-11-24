@@ -1035,7 +1035,9 @@
    ["lab_mid", "assets/lab_door_mid.jpg", 1.12, 0.22, "4,8,14"],
    ["lab_closed", "assets/lab_door_closed.jpg", 1.12, 0.22, "4,8,14"],
    // Agam's squishy forest: bright pastel, barely dimmed
-   ["squishy", "assets/squishy_background.jpg", 1.12, 0.06, "60,20,70"]].forEach(function(d){
+   ["squishy", "assets/squishy_background.jpg", 1.12, 0.06, "60,20,70"],
+   // Glacier Falls: its painting is the level (drawn 1:1 with the world)
+   ["glacier", "assets/glacier_background.jpg", 580 / 540, 0, "6,18,36"]].forEach(function(d){
     var im = new Image();
     var entry = { img: im, ready: false, w: 0, h: 0, dim: d[3], frost: !d[4], dimRGB: d[4] };
     im.onload = function(){
@@ -1706,7 +1708,7 @@
       // F: frozen wastes. Past the frost golems the Frost Wyrm guards the
       // Obsidian Gate; the gate stays sealed in ice until the wyrm is dead.
       name: "Obsidian Gate",
-      exits: {},
+      exits: { left: 15 },          // west: Glacier Falls
       backdrop: "tundra",
       ice: true,
       oneWay: true,
@@ -1934,6 +1936,38 @@
         [620, 220, 260]                      // a high one between them
       ],
       enemies: []
+    },
+    {
+      // West of the Obsidian Gate: a single frozen screen whose ledges are
+      // the ones painted in its backdrop (the art is drawn 1:1 with the
+      // world, so they line up). A hole under the ice arch drops into the
+      // Frozen Depths.
+      name: "Glacier Falls",
+      exits: { right: 7 },
+      backdrop: "glacier",
+      paintedLevel: true,           // the backdrop is the level: no ground or ledge art drawn over it
+      ice: true,
+      oneWay: true,
+      width: 1039,
+      ground: [[0, 590], [690, 1039]],
+      dropPit: { pit: 0, to: 16 },  // the hole under the arch
+      platforms: [
+        [0, 290, 170],              // low shelf, far left
+        [170, 250, 285],            // high shelf with the crystals, left
+        [860, 260, 179]             // shelf on the right, over the big crystals
+      ],
+      enemies: []
+    },
+    {
+      // Below Glacier Falls' hole. Empty for now; walk east to climb back out.
+      name: "Frozen Depths",
+      exits: { right: 15 },
+      backdrop: "den",
+      ice: true,
+      width: 1400,
+      ground: [[0, 1400]],
+      platforms: [],
+      enemies: []
     }
   ];
 
@@ -1964,7 +1998,7 @@
   // Frozen stages: the frost backdrops. Their walking enemies are frost golems.
   function isFrostStage(i){
     var b = STAGES[i].backdrop;
-    return b === "frost" || b === "den" || b === "tundra";
+    return b === "frost" || b === "den" || b === "tundra" || b === "glacier";
   }
 
   function makeEnemy(spawnX, rangeLo, rangeHi, speed, spawnY, golem){
@@ -3280,6 +3314,8 @@
     "8":    { x: 0,   y: 104, w: 112, h: 56, name: "Frozen Den",    color: "#2f6080" },
     "13":   { x: -130, y: 104, w: 112, h: 56, name: "Itay's Secret Lab", color: "#24506e" },
     "14":   { x: 520, y: 0,   w: 112, h: 56, name: "Agam's squishy forest", color: "#a0508a" },
+    "15":   { x: 260, y: 104, w: 112, h: 56, name: "Glacier Falls", color: "#3f7898" },
+    "16":   { x: 260, y: 174, w: 112, h: 56, name: "Frozen Depths", color: "#21455c" },
     "6":    { x: 429, y: 64,  w: 34,  h: 32, name: "",              color: "#3a1a44" },
     "7":    { x: 390, y: 104, w: 112, h: 56, name: "Obsidian Gate", color: "#2f5a7a" },
     // the shadow realm, reached only through the Frozen Den's portal:
@@ -3291,7 +3327,7 @@
   // doors between rooms: [roomA, roomB, x, y, vertical]
   var MAP_DOORS = [
     ["12", "0", -9, 28, false], ["0", "1", 121, 28, false], ["1", "4", 251, 28, false], ["4", "5", 381, 28, false],
-    ["1", "boss", 186, 60, true], ["8", "boss", 121, 132, false], ["13", "8", -9, 132, false], ["5", "14", 511, 14, false],
+    ["1", "boss", 186, 60, true], ["8", "boss", 121, 132, false], ["13", "8", -9, 132, false], ["5", "14", 511, 14, false], ["15", "7", 381, 132, false], ["15", "16", 316, 170, true],
     ["5", "6", 446, 60, true], ["6", "7", 446, 100, true],
     ["9", "10", 816, -172, true], ["10", "11", 881, -222, false]
   ];
@@ -6150,6 +6186,12 @@
     if (backdrop === "frost"){ drawFrostBackdrop(); return; }
     if (backdrop === "den" || backdrop === "tundra" || backdrop === "village" || backdrop === "squishy" || STAGES[stageIndex].realm){ drawFrostBackdrop(backdrop); return; }
     if (backdrop === "lab"){ drawLabBackdrop(); return; }
+    if (STAGES[stageIndex].paintedLevel){
+      var pb = BACKDROPS[backdrop];
+      if (pb && pb.ready) ctx.drawImage(pb.img, -camX, -camY, pb.w, pb.h);   // pinned to the world, so its ledges are the real ones
+      else { ctx.fillStyle = "#1c3346"; ctx.fillRect(0, 0, VW, VH); }
+      return;
+    }
     if (backdrop && backdrop !== "forest"){
       var bd = BACKDROPS[backdrop];
       if (bd && bd.ready){
@@ -6276,6 +6318,7 @@
   }
 
   function drawPlatform(p){
+    if (STAGES[stageIndex].paintedLevel) return;     // the ledges are painted in the backdrop
     var realm = STAGES[stageIndex].realm || STAGES[stageIndex].tiles;
     if (realm){ drawRealmPlatform(p, REALM_SETS[realm]); return; }
     if (STAGES[stageIndex].ice){ drawIcePlatform(p); return; }
@@ -6411,13 +6454,30 @@
   // The shaft pit: a dark drop with embers sinking into it and pulsing
   // down-chevrons, so it reads as "a way down", not lava.
   function drawShaft(sx, w){
+    var icy = isFrostStage(stageIndex);
     var g = ctx.createLinearGradient(0, GROUND_Y, 0, VH);
-    g.addColorStop(0, "rgba(6,3,4,0.95)");
-    g.addColorStop(1, "rgba(0,0,0,1)");
+    g.addColorStop(0, icy ? "rgba(8,22,36,0.97)" : "rgba(6,3,4,0.95)");
+    g.addColorStop(1, icy ? "rgba(2,8,16,1)" : "rgba(0,0,0,1)");
     ctx.fillStyle = g;
-    ctx.fillRect(sx, GROUND_Y, w, VH - GROUND_Y);
+    if (STAGES[stageIndex].paintedLevel){
+      // cut into painted snow: a ragged mouth reaching up through the snow
+      // lip, with a frosty rim and short icicles hanging into the dark
+      var top = GROUND_Y - 10;
+      ctx.beginPath(); ctx.moveTo(sx - 4, VH);
+      ctx.lineTo(sx - 4, top + 8); ctx.lineTo(sx + w * 0.12, top + 2); ctx.lineTo(sx + w * 0.3, top + 6);
+      ctx.lineTo(sx + w * 0.5, top); ctx.lineTo(sx + w * 0.7, top + 5); ctx.lineTo(sx + w * 0.88, top + 1);
+      ctx.lineTo(sx + w + 4, top + 8); ctx.lineTo(sx + w + 4, VH); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "rgba(235,248,255,0.95)"; ctx.lineWidth = 3; ctx.lineJoin = "round";
+      ctx.beginPath(); ctx.moveTo(sx - 10, top + 10); ctx.lineTo(sx - 4, top + 8); ctx.lineTo(sx + w * 0.12, top + 2); ctx.lineTo(sx + w * 0.3, top + 6);
+      ctx.lineTo(sx + w * 0.5, top); ctx.lineTo(sx + w * 0.7, top + 5); ctx.lineTo(sx + w * 0.88, top + 1); ctx.lineTo(sx + w + 4, top + 8); ctx.lineTo(sx + w + 10, top + 10); ctx.stroke();
+      ctx.fillStyle = "rgba(210,236,250,0.9)";
+      [[0.0, 18], [0.06, 11], [0.94, 14], [1.0, 20]].forEach(function(ic){
+        var ix = sx - 4 + (w + 8) * ic[0], iy = top + 8;
+        ctx.beginPath(); ctx.moveTo(ix - 4, iy); ctx.lineTo(ix + 4, iy); ctx.lineTo(ix, iy + ic[1]); ctx.closePath(); ctx.fill();
+      });
+    } else ctx.fillRect(sx, GROUND_Y, w, VH - GROUND_Y);
     var hg = ctx.createRadialGradient(sx + w/2, GROUND_Y, 4, sx + w/2, GROUND_Y, w);
-    hg.addColorStop(0, "rgba(120,40,255,0.18)");
+    hg.addColorStop(0, icy ? "rgba(120,200,255,0.2)" : "rgba(120,40,255,0.18)");
     hg.addColorStop(1, "rgba(120,40,255,0)");
     ctx.fillStyle = hg;
     ctx.fillRect(sx - w/2, GROUND_Y - w, w*2, w + 70);
@@ -6426,11 +6486,11 @@
       var ex = sx + w*(0.15 + 0.17*e);
       var ey = GROUND_Y - 60 + t*12;
       var ea = Math.min(1, t/3) * Math.max(0, 1 - t/10);
-      ctx.fillStyle = "rgba(255,170,90," + (ea*0.8).toFixed(2) + ")";
+      ctx.fillStyle = (icy ? "rgba(220,245,255," : "rgba(255,170,90,") + (ea*0.8).toFixed(2) + ")";   // snowflakes / embers
       ctx.beginPath(); ctx.arc(ex, ey, 1.6, 0, Math.PI*2); ctx.fill();
     }
     var bob = 4 * Math.sin(timeAlive * 0.1);
-    ctx.strokeStyle = "rgba(255,210,170," + (0.45 + 0.35*pulseOf(timeAlive)).toFixed(2) + ")";
+    ctx.strokeStyle = (icy ? "rgba(200,240,255," : "rgba(255,210,170,") + (0.45 + 0.35*pulseOf(timeAlive)).toFixed(2) + ")";
     ctx.lineWidth = 3;
     for (var c = 0; c < 2; c++){
       var cy = GROUND_Y - 70 + c*14 + bob, cx = sx + w/2;
