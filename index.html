@@ -1037,7 +1037,9 @@
    // Agam's squishy forest: bright pastel, barely dimmed
    ["squishy", "assets/squishy_background.jpg", 1.12, 0.06, "60,20,70"],
    // Glacier Falls: its painting is the level (drawn 1:1 with the world)
-   ["glacier", "assets/glacier_background.jpg", 580 / 540, 0, "6,18,36"]].forEach(function(d){
+   ["glacier", "assets/glacier_background.jpg", 580 / 540, 0, "6,18,36"],
+   // Frozen Depths: a root cave, also drawn 1:1 with the world
+   ["depths", "assets/depths_background.jpg", 580 / 540, 0, "10,8,6"]].forEach(function(d){
     var im = new Image();
     var entry = { img: im, ready: false, w: 0, h: 0, dim: d[3], frost: !d[4], dimRGB: d[4] };
     im.onload = function(){
@@ -1951,6 +1953,7 @@
       width: 1039,
       ground: [[0, 590], [690, 1039]],
       dropPit: { pit: 0, to: 16 },  // the hole under the arch
+      entryBelowX: 700,             // climbing back up from the Depths: pop up just east of the hole
       platforms: [
         [0, 290, 170],              // low shelf, far left
         [170, 250, 285],            // high shelf with the crystals, left
@@ -1959,14 +1962,35 @@
       enemies: []
     },
     {
-      // Below Glacier Falls' hole. Empty for now; walk east to climb back out.
+      // Below Glacier Falls' hole: a root-choked cave with an underground
+      // river. Like Glacier Falls, the painting is the level: the ledges are
+      // its painted shelves. You drop in onto the top-left shelf; the river
+      // in the middle is a fall (one hit, back to where you came in). The way
+      // back is up where you dropped in: jump up off the top-left shelf,
+      // through the beam of light, into Glacier Falls' hole.
       name: "Frozen Depths",
-      exits: { right: 15 },
-      backdrop: "den",
-      ice: true,
-      width: 1400,
-      ground: [[0, 1400]],
-      platforms: [],
+      exits: {},
+      exitTop: { y: 40, to: 15, x0: 180, x1: 340 },
+      summit: [195, 140, 130],      // beam of light marking the way up
+      backdrop: "depths",
+      paintedLevel: true,
+      paintOffsetY: -25,            // lifts the art so its bottom-left shelf sits on the ground line
+      oneWay: true,
+      entryTopX: 250,               // falls in over the top-left shelf
+      fallTitle: "YOU FELL", fallText: "The underground river swept you away.",
+      width: 1039,
+      ground: [[0, 400]],           // bottom-left shelf and cave floor
+      // the river bank on the right: one smooth curved slope you walk up,
+      // traced from the painting ([x, top] points)
+      slope: [[556, 440], [600, 427], [650, 415], [700, 400], [750, 380], [800, 360],
+              [850, 336], [900, 326], [950, 324], [1000, 320], [1039, 318]],
+      platforms: [
+        [60, 140, 295],             // top-left shelf, under the light
+        [20, 313, 265],             // mossy shelf below it
+        [350, 365, 68],             // little stepping stone by the falls
+        [463, 308, 202],            // root-tangled shelf over the river
+        [838, 180, 72]              // high mossy ledge, top right
+      ],
       enemies: []
     }
   ];
@@ -3315,7 +3339,7 @@
     "13":   { x: -130, y: 104, w: 112, h: 56, name: "Itay's Secret Lab", color: "#24506e" },
     "14":   { x: 520, y: 0,   w: 112, h: 56, name: "Agam's squishy forest", color: "#a0508a" },
     "15":   { x: 260, y: 104, w: 112, h: 56, name: "Glacier Falls", color: "#3f7898" },
-    "16":   { x: 260, y: 174, w: 112, h: 56, name: "Frozen Depths", color: "#21455c" },
+    "16":   { x: 260, y: 174, w: 112, h: 56, name: "Frozen Depths", color: "#5a3a22" },
     "6":    { x: 429, y: 64,  w: 34,  h: 32, name: "",              color: "#3a1a44" },
     "7":    { x: 390, y: 104, w: 112, h: 56, name: "Obsidian Gate", color: "#2f5a7a" },
     // the shadow realm, reached only through the Frozen Den's portal:
@@ -3894,6 +3918,26 @@
     }
   }
 
+  // A curved walkable surface (stage.slope: [x, top] points, left to right):
+  // anything falling onto it lands on the line, and walking keeps you
+  // stuck to it uphill and down.
+  function slopeTopAt(x){
+    var sl = STAGES[stageIndex].slope;
+    if (!sl || x < sl[0][0] || x > sl[sl.length - 1][0]) return null;
+    for (var i = 1; i < sl.length; i++){
+      if (x <= sl[i][0]){ var a = sl[i - 1], b = sl[i], k = (x - a[0]) / (b[0] - a[0]); return a[1] + (b[1] - a[1]) * k; }
+    }
+    return null;
+  }
+  function landOnSlope(e){
+    var sy = slopeTopAt(e.x + e.w / 2);
+    if (sy === null){ e.onSlope = false; return; }
+    var feet = e.y + e.h;
+    if (e.vy >= 0 && feet >= sy - (e.onSlope ? 12 : 1) && feet <= sy + 28){
+      e.y = sy - e.h; e.vy = 0; e.onGround = true; e.onSlope = true;
+    } else e.onSlope = false;
+  }
+
   // ---------- Update ----------
   function update(dt){
     if (gameState !== "playing") return;
@@ -3964,6 +4008,7 @@
     if (player.vx !== 0) player.walkCycle += 0.25 * dt; else player.walkCycle = 0;
 
     moveAndCollide(player, allPlatforms);
+    landOnSlope(player);
 
     // Walking off an edge that has an exit moves to that stage.
     var exits = STAGES[stageIndex].exits || {};
@@ -4001,12 +4046,13 @@
     if (player.y > VH + 40){
       if (!godMode) player.hp -= 1;
       shake = 12;
-      SFX.play("sizzle");
+      SFX.play(STAGES[stageIndex].fallTitle ? "splat" : "sizzle");
       buzz(player.hp <= 0 ? [120, 60, 220] : 140);
       if (player.hp <= 0){
         player.hp = 0;
         gameState = "gameover"; SFX.play("gameover");
-        var realmFall = !!STAGES[stageIndex].realm;
+        var realmFall = !!STAGES[stageIndex].realm, fs = STAGES[stageIndex];
+        if (fs.fallTitle){ showOverlay(fs.fallTitle, fs.fallText + " Score: " + score + " · Time: " + Math.floor(timeAlive/60) + "s", "Try Again"); return; }
         showOverlay(isFrostStage(stageIndex) ? "YOU FROZE" : realmFall ? "YOU FELL" : "YOU BURNED", (isFrostStage(stageIndex) ? "The ice chasm took you." : realmFall ? "The void swallowed you." : "The lava took you.") + " Score: " + score + " · Time: " + Math.floor(timeAlive/60) + "s", "Try Again");
         return;
       }
@@ -6188,7 +6234,7 @@
     if (backdrop === "lab"){ drawLabBackdrop(); return; }
     if (STAGES[stageIndex].paintedLevel){
       var pb = BACKDROPS[backdrop];
-      if (pb && pb.ready) ctx.drawImage(pb.img, -camX, -camY, pb.w, pb.h);   // pinned to the world, so its ledges are the real ones
+      if (pb && pb.ready) ctx.drawImage(pb.img, -camX, -camY + (STAGES[stageIndex].paintOffsetY || 0), pb.w, pb.h);   // pinned to the world, so its ledges are the real ones
       else { ctx.fillStyle = "#1c3346"; ctx.fillRect(0, 0, VW, VH); }
       return;
     }
@@ -6379,6 +6425,7 @@
       var sx = pits[i][0] - camX, w = pits[i][1] - pits[i][0];
       if (sx + w < 0 || sx > VW) continue;
       if (drop && drop.pit === i){ drawShaft(sx, w); continue; }
+      if (STAGES[stageIndex].paintedLevel) continue;    // the gap is painted (e.g. the Depths' river)
       if (icy){ drawChasm(sx, w, i); continue; }
       if (STAGES[stageIndex].realm){ drawVoid(sx, w, i); continue; }
       var g = ctx.createLinearGradient(0, GROUND_Y, 0, VH);
