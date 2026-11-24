@@ -2039,6 +2039,7 @@
       name: "Dark Burrow",
       exits: { right: 19 },
       backdrop: "depths",
+      earthFloor: true,
       width: 1200,
       ground: [[0, 1200]],
       door: { x0: 60, x1: 190, to: 17 },
@@ -2047,10 +2048,15 @@
       enemies: []
     },
     {
-      // East of the Dark Burrow. Empty for now; walk back west to the Burrow.
+      // East of the Dark Burrow: the Earth Golem's lair. He lies buried at the
+      // far end, a heap of rubble you'd take for part of the cave, until you
+      // walk up close. Walk back west to the Burrow.
       name: "Deep Tunnels",
       exits: { left: 18 },
       backdrop: "depths",
+      earthFloor: true,
+      boss: "earth",
+      earthX: 1080,                 // where he lies buried
       width: 1400,
       ground: [[0, 1400]],
       platforms: [],
@@ -3028,7 +3034,7 @@
                    .concat((s.flyers || []).map(function(route, i){ var f = makeFlyer(route, i); f.frost = frost; return f; }))
                    .concat((s.shades || []).map(makeShade))
                    .concat((s.ghosts || []).map(makeGhost)),
-        boss: s.boss === "wyrm" ? makeWyrm(s) : s.boss === "wraith" ? makeWraith(s) : s.boss === "itay" ? makeItay(s) : s.boss === "queen" ? makeQueen(s) : s.boss ? makeBoss(s.width) : null
+        boss: s.boss === "wyrm" ? makeWyrm(s) : s.boss === "wraith" ? makeWraith(s) : s.boss === "itay" ? makeItay(s) : s.boss === "queen" ? makeQueen(s) : s.boss === "earth" ? makeEarth(s) : s.boss ? makeBoss(s.width) : null
       };
     });
     icicles = [];
@@ -3064,7 +3070,7 @@
     stageIndex = index;
     player.visited[mapKey(index)] = true;
     var stage = STAGES[index];
-    labBolts = []; labWaves = []; queenHearts = []; queenRollers = [];
+    labBolts = []; labWaves = []; queenHearts = []; queenRollers = []; earthRocks = []; earthWaves = [];
     if (stage.boss === "queen" && queenMusic.preload !== "auto"){ queenMusic.preload = "auto"; queenMusic.load(); }
     if (stage.boss === "itay" && itayMusic.preload !== "auto"){ itayMusic.preload = "auto"; itayMusic.load(); }
     if (stage.boss === "wraith" && bossMusic.preload !== "auto"){ bossMusic.preload = "auto"; bossMusic.load(); }
@@ -4497,6 +4503,7 @@
     if (boss.kind === "wraith"){ updateWraith(dt, hitbox); return; }
     if (boss.kind === "itay"){ updateItay(dt, hitbox); return; }
     if (boss.kind === "queen"){ updateQueen(dt, hitbox); return; }
+    if (boss.kind === "earth"){ updateEarth(dt, hitbox); return; }
     var b = boss;
     b.anim += dt;
     if (b.hitFlash > 0) b.hitFlash -= dt;
@@ -4640,6 +4647,7 @@
     if (b.kind === "wraith"){ drawWraith(b); return; }
     if (b.kind === "itay"){ drawItay(b); if (b.heart) drawTechHeart(b.heart); return; }
     if (b.kind === "queen"){ drawQueen(b); if (b.heart) drawTechHeart(b.heart); return; }
+    if (b.kind === "earth"){ drawEarth(b); return; }
     var img = BOSS_SPRITES[bossPose(b)];
     var sx = b.x - camX;
     ctx.save();
@@ -4697,6 +4705,7 @@
   function drawBossAttacks(){
     drawLabAttacks();
     drawQueenAttacks();
+    drawEarthAttacks();
     drawIcicles();
     drawSouls();
     drawGhostBolts();
@@ -4739,16 +4748,17 @@
     ctx.fillStyle = "rgba(10,6,8,0.6)";
     roundRect(x - 10, y - 24, w + 20, h + 34, 10);
     ctx.fill();
-    var icy = b.kind === "wyrm", shade = b.kind === "wraith", tech = b.kind === "itay", sweet = b.kind === "queen";
-    ctx.fillStyle = sweet ? "#ffd6f0" : tech ? "#bff3ff" : icy ? "#cdeeff" : shade ? "#e6d0ff" : "#ffcf9e";
+    var icy = b.kind === "wyrm", shade = b.kind === "wraith", tech = b.kind === "itay", sweet = b.kind === "queen", earthy = b.kind === "earth";
+    ctx.fillStyle = earthy ? "#f0d6b0" : sweet ? "#ffd6f0" : tech ? "#bff3ff" : icy ? "#cdeeff" : shade ? "#e6d0ff" : "#ffcf9e";
     ctx.font = "10px 'Press Start 2P', monospace";
     ctx.textAlign = "center";
-    ctx.fillText(sweet ? QUEEN_NAME : tech ? ITAY_NAME : icy ? WYRM_NAME : shade ? WRAITH_NAME : BOSS_NAME, VW/2, y - 8);
-    ctx.fillStyle = sweet ? "#2a1430" : tech ? "#0b1820" : icy ? "#0e1e2c" : shade ? "#1a0e2a" : "#2a1210";
+    ctx.fillText(earthy ? EARTH_NAME : sweet ? QUEEN_NAME : tech ? ITAY_NAME : icy ? WYRM_NAME : shade ? WRAITH_NAME : BOSS_NAME, VW/2, y - 8);
+    ctx.fillStyle = earthy ? "#24170e" : sweet ? "#2a1430" : tech ? "#0b1820" : icy ? "#0e1e2c" : shade ? "#1a0e2a" : "#2a1210";
     roundRect(x, y, w, h, 4); ctx.fill();
     var pct = b.hp / b.maxHp;
     var g = ctx.createLinearGradient(x, 0, x + w, 0);
-    if (sweet){ g.addColorStop(0, "#ff8ad0"); g.addColorStop(0.5, "#ffe08a"); g.addColorStop(1, "#8ad8ff"); }
+    if (earthy){ g.addColorStop(0, "#7a4a22"); g.addColorStop(1, "#ffb060"); }
+    else if (sweet){ g.addColorStop(0, "#ff8ad0"); g.addColorStop(0.5, "#ffe08a"); g.addColorStop(1, "#8ad8ff"); }
     else if (tech){ g.addColorStop(0, "#ff8a2a"); g.addColorStop(1, "#4fe6ff"); }
     else if (icy){ g.addColorStop(0, "#3aa8ff"); g.addColorStop(1, "#c8f4ff"); }
     else if (shade){ g.addColorStop(0, "#6a22e0"); g.addColorStop(1, "#e2a8ff"); }
@@ -4824,9 +4834,9 @@
     var b = boss;
     if (!b || b.hp === undefined) return;
     if (b.shockT > 0) b.shockT -= dt;
-    if (!fieldOn() || b.shockT > 0 || b.state === "waiting" || b.state === "intro" || b.state === "dead" || b.hp <= 0) return;
+    if (!fieldOn() || b.shockT > 0 || b.state === "waiting" || b.state === "intro" || b.state === "rise" || b.state === "dead" || b.hp <= 0) return;
     if (b.alpha !== undefined && b.alpha < 0.5) return;
-    var box = b.kind === "wyrm" ? wyrmBox(b) : b.kind === "wraith" ? wraithBox(b) : b.kind === "itay" ? itayBox(b) : b.kind === "queen" ? queenBox(b) : bossBox(b);
+    var box = b.kind === "wyrm" ? wyrmBox(b) : b.kind === "wraith" ? wraithBox(b) : b.kind === "itay" ? itayBox(b) : b.kind === "queen" ? queenBox(b) : b.kind === "earth" ? earthBox(b) : bossBox(b);
     if (!fieldTouches(box)) return;
     b.shockT = SHOCK_T;
     zapTo(box.x + box.w / 2, box.y + box.h / 2);
@@ -4834,6 +4844,7 @@
     else if (b.kind === "wraith") damageWraith(b, 22);
     else if (b.kind === "itay") damageItay(b);
     else if (b.kind === "queen") damageQueen(b);
+    else if (b.kind === "earth") damageEarth(b);
     else damageBoss(b, 1, 22);
   }
   function updateForceField(dt){
@@ -5223,6 +5234,219 @@
     for (var j = 0; j < queenRollers.length; j++){
       var r = queenRollers[j];
       heartAt(r.x - camX, GROUND_Y - 17, r.spin, 1.05);
+    }
+  }
+
+  // ---------- Boss: the Earth Golem (Deep Tunnels) ----------
+  // A hulk of root, rock and packed earth. He starts buried: a heap of rubble
+  // and roots on the tunnel floor that looks like part of the cave. Walk up
+  // close and the ground shakes as he heaves himself out. Then he walks you
+  // down and picks from two moves:
+  //   slam  - rears back a fist (the tell), smashes the floor and sends a
+  //           shockwave each way along it (jump them). He's open as he
+  //           straightens up.
+  //   throw - wrenches a boulder out of the ground, lifts it overhead and
+  //           hurls it at you in an arc. Swat it to shatter it, or dodge.
+  // Below half health he's quicker, slams twice and throws two boulders.
+  // Beaten, he slumps and crumbles back into a heap.
+  var EARTH_HP = 18;
+  var EARTH_NAME = "EARTH GOLEM";
+  var EARTH_S = 1.25, EARTH_WAKE_R = 260, EARTH_HEAP_K = 0.5;
+  var EARTH_ROCK_S = 2.0;                                // thrown boulders: about the size of the one he lifts
+  var EARTH_SPRITES = {};
+  [["idle0", 0.5], ["idle1", 0.5], ["walk0", 0.5], ["walk1", 0.5], ["walk2", 0.5],
+   ["slam0", 0.55], ["slam1", 0.5], ["slam2", 0.45], ["slam3", 0.5],
+   ["throw0", 0.35], ["throw1", 0.5], ["throw2", 0.33], ["defeat0", 0.5], ["defeat1", 0.5], ["rock", 0.5]].forEach(function(f){
+    EARTH_SPRITES[f[0]] = loadArt("assets/earth_" + f[0] + ".webp", { ax: f[1] });
+  });
+  var earthRocks = [], earthWaves = [];
+
+  function makeEarth(stage){
+    return {
+      kind: "earth", x: stage.earthX || 1000, y: GROUND_Y, vx: 0, facing: -1,
+      hp: EARTH_HP, maxHp: EARTH_HP, phase2: false,
+      state: "waiting", t: 0, anim: 0, nextAttackIn: 40, fired: 0, slams: 0,
+      hitFlash: 0, invuln: 0, dead_t: 0
+    };
+  }
+  function earthBox(b){ return rect(b.x - 60, b.y - 220, 120, 216); }
+  function earthState(b, s){
+    b.state = s; b.t = 0; b.fired = 0;
+    if (s === "rise") SFX.play("roar");
+    if (s === "slam") SFX.play("swing", 0.6);
+  }
+  function earthDust(x, y, n, power, cols){
+    for (var i = 0; i < n; i++){
+      var ang = -Math.PI * Math.random(), sp = 1 + Math.random() * power, life = 22 + Math.random() * 30;
+      explosionParticles.push({ x: x + (Math.random() - 0.5) * 60, y: y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+        life: life, maxLife: life, size: 1.8 + Math.random() * 3.2, color: (cols || ["110,80,55", "160,120,80", "70,50,35"])[i % 3] });
+    }
+  }
+  function damageEarth(b){
+    b.hp -= 1; b.invuln = 20; b.hitFlash = 10;
+    SFX.play(b.hp <= 0 ? "bossDeath" : "bossHit");
+    shake = Math.max(shake, 6);
+    impact(b.hp <= 0 ? 14 : 4, b.hp <= 0 ? [90, 40, 260] : 45);
+    earthDust(b.x, b.y - 90, 10, 3);
+    if (!b.phase2 && b.hp <= b.maxHp / 2){ b.phase2 = true; shake = 14; earthDust(b.x, b.y - 40, 30, 5, ["255,170,60", "200,110,40", "110,80,55"]); SFX.play("roar"); }
+    if (b.hp <= 0){
+      b.hp = 0; earthState(b, "dead");
+      earthRocks = []; earthWaves = [];
+      shake = 22; earthDust(b.x, b.y - 60, 50, 6);
+    }
+  }
+  function earthThrow(b, spread){
+    var hx = b.x + b.facing * 150, hy = b.y - 190;      // from his outstretched hand
+    var tx = player.x + player.w / 2 + (spread || 0), dx = tx - hx;
+    var T = Math.max(34, Math.min(70, Math.abs(dx) / 6));          // flight time in frames
+    earthRocks.push({ x: hx, y: hy, vx: dx / T, vy: ((GROUND_Y - 46 - hy) - 0.5 * 0.4 * T * T) / T, t: 0, spin: 0 });
+    SFX.play("fireball", near(hx, hy));
+  }
+
+  function updateEarth(dt, hitbox){
+    var b = boss;
+    b.anim += dt;
+    if (b.hitFlash > 0) b.hitFlash -= dt;
+    if (b.invuln > 0) b.invuln -= dt;
+    updateEarthAttacks(dt, hitbox);
+    if (b.state === "dead"){ b.dead_t += dt; if (b.dead_t > 40 && b.dead_t < 44) { shake = Math.max(shake, 10); earthDust(b.x, GROUND_Y - 10, 30, 4); SFX.play("slam"); } return; }
+    var mul = b.phase2 ? 1.3 : 1;
+    var pcx = player.x + player.w / 2;
+    function faceP(){ if (Math.abs(pcx - b.x) > 12) b.facing = pcx > b.x ? 1 : -1; }
+    b.t += dt;
+    switch (b.state){
+      case "waiting":           // buried: just a heap of rubble on the floor
+        if (Math.abs(pcx - b.x) < EARTH_WAKE_R){ earthState(b, "rise"); }
+        break;
+      case "rise":              // the ground shakes and he heaves himself out
+        shake = Math.max(shake, b.t < 60 ? 14 : 4); if (b.t < 2) buzz([80, 40, 160]);
+        if (Math.random() < 0.5 * dt) earthDust(b.x, GROUND_Y - 6, 3, 3);
+        faceP();
+        if (b.t > 95){ earthState(b, "walk"); b.nextAttackIn = 30; }
+        break;
+      case "walk":
+        faceP();
+        var dist = Math.abs(pcx - b.x), want = dist > 300 ? 1 : dist < 170 ? -1 : 0;
+        b.vx = want * b.facing * 1.6 * mul;
+        b.x += b.vx * dt;
+        if (b.t > b.nextAttackIn){
+          if (Math.random() < (dist < 260 ? 0.65 : 0.35)){ earthState(b, "slam"); b.slams = b.phase2 ? 2 : 1; }
+          else earthState(b, "throw");
+        }
+        break;
+      case "slam":
+        faceP();
+        var wind = b.phase2 ? 22 : 32;
+        if (b.t >= wind && !b.fired){
+          b.fired = 1;
+          SFX.play("slam"); shake = Math.max(shake, 16); buzz([60, 30, 90]);
+          earthWaves.push({ x: b.x - 50, dir: -1, t: 0 }, { x: b.x + 50, dir: 1, t: 0 });
+          earthDust(b.x + b.facing * 30, GROUND_Y - 8, 26, 5, ["255,190,90", "160,120,80", "90,65,45"]);
+        }
+        if (b.t > wind + 26){
+          b.slams--;
+          if (b.slams > 0){ earthState(b, "slam"); b.slams = 1; b.t = 10; }
+          else earthState(b, "recover");
+        }
+        break;
+      case "recover":           // straightening up after a slam: the opening
+        if (b.t > (b.phase2 ? 34 : 50)){ earthState(b, "walk"); b.nextAttackIn = (30 + Math.random() * 40) / mul; }
+        break;
+      case "throw":
+        faceP();
+        var lift = b.phase2 ? 18 : 26, rel = lift + (b.phase2 ? 16 : 22);
+        if (b.t >= rel && !b.fired){ b.fired = 1; earthThrow(b, 0); if (b.phase2) earthThrow(b, b.facing * 120); }
+        if (b.t > rel + 24){ earthState(b, "walk"); b.nextAttackIn = (40 + Math.random() * 40) / mul; }
+        break;
+    }
+    b.x = Math.max(80, Math.min(WORLD_W - 80, b.x));
+
+    var awake = b.state !== "waiting" && b.state !== "rise";
+    var box = earthBox(b);
+    if (awake && b.invuln <= 0){
+      if (hitbox && intersects(hitbox, box)) damageEarth(b);
+      else if (player.superMode && intersects(player, box)) damageEarth(b);
+    }
+    if (awake && b.state !== "dead" && intersects(player, box)) hurtPlayer(b.x, b.state === "slam" ? "The Earth Golem pounded you into the floor." : "The Earth Golem flattened you.");
+  }
+
+  function updateEarthAttacks(dt, hitbox){
+    for (var i = earthRocks.length - 1; i >= 0; i--){
+      var r = earthRocks[i];
+      r.t += dt; r.vy += 0.4 * dt; r.x += r.vx * dt; r.y += r.vy * dt; r.spin += 0.15 * dt;
+      var rb = rect(r.x - 46, r.y - 42, 92, 84);
+      var hitGround = r.y > GROUND_Y - 44, gone = hitGround || r.x < -60 || r.x > WORLD_W + 60 || r.t > 400;
+      if (!gone && hitbox && intersects(hitbox, rb)){ gone = true; SFX.play("swat"); shake = Math.max(shake, 5); }
+      else if (!gone && intersects(player, rb)){ gone = true; hurtPlayer(r.x, "A boulder knocked you flat."); }
+      if (gone){
+        earthDust(r.x, Math.min(r.y, GROUND_Y - 8), 30, 5, ["150,120,85", "100,75,55", "190,160,120"]);
+        if (hitGround){ SFX.play("slam", near(r.x, GROUND_Y) * 0.6); shake = Math.max(shake, 6); }
+        earthRocks.splice(i, 1);
+      }
+    }
+    for (var j = earthWaves.length - 1; j >= 0; j--){
+      var w = earthWaves[j];
+      w.t += dt; w.x += w.dir * 6.8 * (boss && boss.phase2 ? 1.2 : 1) * dt;
+      if (Math.random() < 0.4 * dt) earthDust(w.x, GROUND_Y - 4, 1, 2);
+      if (intersects(player, rect(w.x - 16, GROUND_Y - 34, 32, 34))) hurtPlayer(w.x, "The Earth Golem's shockwave got you.");
+      if (w.x < -40 || w.x > WORLD_W + 40) earthWaves.splice(j, 1);
+    }
+  }
+
+  function earthPose(b){
+    switch (b.state){
+      case "waiting": return "defeat1";
+      case "rise": return b.t < 45 ? "defeat1" : b.t < 75 ? "defeat0" : "idle0";
+      case "walk": return Math.abs(b.vx) > 0.1 ? "walk" + (Math.floor(b.anim * 0.09) % 3) : (Math.floor(b.anim * 0.03) % 2 ? "idle1" : "idle0");
+      case "slam": var wind = b.phase2 ? 22 : 32; return b.t < wind * 0.6 ? "slam0" : b.t < wind ? "slam1" : b.t < wind + 14 ? "slam2" : "slam3";
+      case "recover": return "slam3";
+      case "throw": var lift = b.phase2 ? 18 : 26, rel = lift + (b.phase2 ? 16 : 22); return b.t < lift ? "throw0" : b.t < rel ? "throw1" : "throw2";
+      case "dead": return b.dead_t < 42 ? "defeat0" : "defeat1";
+    }
+    return "idle0";
+  }
+  function drawEarth(b){
+    var key = earthPose(b), img = EARTH_SPRITES[key], S = EARTH_S;
+    if (key === "defeat1") S *= EARTH_HEAP_K;            // the heap (buried, or crumbled) is a low mound
+    var sx = b.x - camX;
+    if (sx < -260 || sx > VW + 260 || !img || !img.ready) return;
+    var w = img.naturalWidth * S, h = img.naturalHeight * S;
+    ctx.save();
+    var rising = b.state === "rise" && b.t < 75;
+    var jit = rising ? (Math.random() - 0.5) * 4 : 0;
+    ctx.translate(sx + jit, b.y + 6);
+    if (b.facing < 0 && key.indexOf("defeat") !== 0) ctx.scale(-1, 1);
+    // buried, he's dimmed to sit back into the cave like the rest of the scenery
+    if (b.state === "waiting") ctx.filter = "brightness(0.72) saturate(0.85)";
+    else if (b.hitFlash > 0) ctx.filter = "brightness(1.9) saturate(0.6)";
+    ctx.drawImage(img, -w * img.ax, -h, w, h);
+    ctx.restore();
+    if (b.phase2 && b.state !== "dead" && b.state !== "waiting"){
+      var g = ctx.createRadialGradient(sx, b.y - 100, 6, sx, b.y - 100, 70);
+      g.addColorStop(0, "rgba(255,150,50,0.22)"); g.addColorStop(1, "rgba(255,120,40,0)");
+      ctx.fillStyle = g; ctx.fillRect(sx - 70, b.y - 170, 140, 140);
+    }
+  }
+  function drawEarthAttacks(){
+    var img = EARTH_SPRITES.rock;
+    for (var i = 0; i < earthRocks.length; i++){
+      var r = earthRocks[i], rx = r.x - camX;
+      if (img && img.ready){
+        ctx.save(); ctx.translate(rx, r.y); ctx.rotate(r.spin);
+        var w = img.naturalWidth * EARTH_ROCK_S, h = img.naturalHeight * EARTH_ROCK_S;
+        ctx.drawImage(img, -w / 2, -h / 2, w, h); ctx.restore();
+      } else { ctx.fillStyle = "#8a6a4a"; ctx.beginPath(); ctx.arc(rx, r.y, 20, 0, Math.PI * 2); ctx.fill(); }
+    }
+    for (var j = 0; j < earthWaves.length; j++){
+      var s = earthWaves[j], sx = s.x - camX, flick = 0.8 + 0.2 * Math.sin(s.t * 0.9);
+      var g2 = ctx.createLinearGradient(0, GROUND_Y - 40, 0, GROUND_Y);
+      g2.addColorStop(0, "rgba(160,110,60,0)");
+      g2.addColorStop(0.5, "rgba(150,100,55," + (0.85 * flick).toFixed(2) + ")");
+      g2.addColorStop(1, "rgba(255,190,100,0.95)");
+      ctx.fillStyle = g2;
+      ctx.beginPath(); ctx.moveTo(sx - 20, GROUND_Y);
+      ctx.quadraticCurveTo(sx - 6 * s.dir, GROUND_Y - 46 * flick, sx + 16 * s.dir, GROUND_Y);
+      ctx.closePath(); ctx.fill();
     }
   }
 
@@ -6493,8 +6717,25 @@
     ctx.drawImage(a, m1 - 6, 0, iw - m1 + 6, a.naturalHeight, sx + p.w - capR - 6 * k, y, capR + 6 * k, TH);
   }
 
+  // packed-earth tunnel floor (the Dark Burrow and the Deep Tunnels)
+  function drawEarthFloor(p){
+    var sx = p.x - camX;
+    if (sx + p.w < 0 || sx > VW) return;
+    var g = ctx.createLinearGradient(0, p.y, 0, VH);
+    g.addColorStop(0, "#4a3020"); g.addColorStop(0.15, "#33200f"); g.addColorStop(1, "#120a05");
+    ctx.fillStyle = g; ctx.fillRect(sx, p.y, p.w, VH - p.y);
+    ctx.fillStyle = "rgba(140,100,60,0.55)"; ctx.fillRect(sx, p.y, p.w, 3);          // worn top edge
+    // pebbles and root ends, fixed in place along the floor
+    for (var x = Math.floor(Math.max(p.x, camX - 20) / 37) * 37; x < Math.min(p.x + p.w, camX + VW + 20); x += 37){
+      var h = (x * 9301 + 49297) % 233280 / 233280;
+      ctx.fillStyle = h > 0.5 ? "rgba(120,90,60,0.7)" : "rgba(70,50,35,0.8)";
+      ctx.beginPath(); ctx.ellipse(x - camX + h * 20, p.y + 12 + h * 30, 4 + h * 5, 2.5 + h * 2, 0, 0, Math.PI * 2); ctx.fill();
+      if (h > 0.7){ ctx.strokeStyle = "rgba(90,60,35,0.8)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - camX, p.y + 4); ctx.quadraticCurveTo(x - camX + 12, p.y + 18, x - camX + 26, p.y + 14); ctx.stroke(); }
+    }
+  }
   function drawPlatform(p){
     if (STAGES[stageIndex].paintedLevel) return;     // the ledges are painted in the backdrop
+    if (STAGES[stageIndex].earthFloor && p.ground){ drawEarthFloor(p); return; }
     var realm = STAGES[stageIndex].realm || STAGES[stageIndex].tiles;
     if (realm){ drawRealmPlatform(p, REALM_SETS[realm]); return; }
     if (STAGES[stageIndex].ice){ drawIcePlatform(p); return; }
