@@ -1966,6 +1966,10 @@
       name: "Glacier Falls",
       exits: { right: 7, left: 3 },   // west: through the crystals, off the low left shelf, into the fire boss's room
       crystalGate: { edge: 150, top: 120, shelf: 290, x: 92 },   // clear of the flask panel in the corner
+      hintY: { left: 290 },         // the way west is off the crystals' shelf, so its arrow sits over it,
+      hintX: { left: 90 },          // tucked half under the flask panel in the corner, beside the hidden flask
+      potion: [136, 290, 62],       // max-life flask hidden behind the crystals: x, shelf top, float height
+      potionBehindCrystal: true,    // only shows (and can be taken) once the crystals are broken
       entryLeft: { x: 30, y: 290 },   // coming back from the boss room: out on the low left shelf
       backdrop: "glacier",
       paintedLevel: true,           // the backdrop is the level: no ground or ledge art drawn over it
@@ -1990,7 +1994,9 @@
       // back is up where you dropped in: jump up off the top-left shelf,
       // through the beam of light, into Glacier Falls' hole.
       name: "Sunken River",
-      exits: {},
+      exits: { right: 20 },         // the far end of the river bank runs on into the Hidden Grotto
+      entryRight: { x: 975, y: 322 },   // back from the grotto: onto the top of the bank
+      secretRight: true,            // the grotto is a secret: no arrow points to it
       exitTop: { y: 40, to: 15, x0: 180, x1: 340 },
       summit: [195, 140, 130],      // beam of light marking the way up
       backdrop: "depths",
@@ -2075,6 +2081,23 @@
       earthX: 1080,                 // where he lies buried
       width: 1400,
       ground: [[0, 1400]],
+      platforms: [],
+      enemies: []
+    },
+    {
+      // East off the top of the Sunken River's bank: a tiny pitch-dark
+      // grotto, half a screen wide (the rest of the screen is solid rock).
+      // A max-life flask hangs in the dark high up near the roof, barely a
+      // glimmer: walk to the back wall, turn round, double jump and dash west
+      // at the top of the jump to grab it. Walk west to go back.
+      name: "Hidden Grotto",
+      exits: { left: 16 },
+      backdrop: "depths",
+      earthFloor: true,
+      dark: true,                   // near-total darkness; only a faint glow around you
+      width: 480,
+      ground: [[0, 480]],
+      potion: [320, GROUND_Y, 264], // way up near the roof: from the back wall, double jump and dash west into it
       platforms: [],
       enemies: []
     }
@@ -2478,10 +2501,10 @@
     var c = abilityCard;
     if (!c) return;
     c.t += dt;
-    var dash = c.kind === "dash", field = c.kind === "field";
-    var used = field ? (player.ffT > 0 ? 2 : 0) : dash ? player.dashes : player.doubleJumps;
+    var dash = c.kind === "dash", field = c.kind === "field", heal = c.kind === "heal";
+    var used = field ? (player.ffT > 0 ? 2 : 0) : heal ? Math.min(2, (player.heals || 0) * 2) : dash ? player.dashes : player.doubleJumps;
     if (c.state === "pending"){
-      if ((dash || field || stageIndex === FROST_STAGE) && stageBannerT <= 0){ c.state = "show"; c.t = 0; c.used0 = field ? 0 : used; SFX.play("ability"); }
+      if ((dash || field || heal || stageIndex === FROST_STAGE) && stageBannerT <= 0){ c.state = "show"; c.t = 0; c.used0 = field || heal ? 0 : used; SFX.play("ability"); }
     } else if (c.state === "show"){
       // the force field card stays until the field has gone up once (or ~15 s)
       if ((c.t > 150 && used - c.used0 >= 2) || c.t > 900){ c.state = "hide"; c.t = 0; }
@@ -2595,6 +2618,76 @@
   // fall to the sword (a pip lights for each), the third raises the field,
   // and the fourth walks into it, flickers purple and white and drops.
   var FIELD_DEMO_LOOP = 260, FIELD_DEMO_SPEED = 2.4;
+  // Sweet heal demo: the hero swings at an imp five times; five pips fill,
+  // then a "+1" floats up and the flask gains a notch.
+  var HEAL_DEMO_LOOP = 160, HEAL_DEMO_SWINGS = [16, 36, 56, 76, 96];
+  function drawHealDemo(c, x, y){
+    var dx = x + 24, dy = y + 64, dw = 262, dh = 96;
+    roundRect(dx, dy, dw, dh, 8);
+    ctx.fillStyle = "rgba(150,70,120,0.45)";
+    ctx.fill();
+    var groundY = dy + dh - 12, heroX = dx + 92, impX = heroX + 40;
+    ctx.fillStyle = "rgba(255,215,235,0.85)";
+    ctx.fillRect(dx + 10, groundY, dw - 20, 3);
+    var tt = Math.floor(c.t) % HEAL_DEMO_LOOP, hits = 0, swing = false, flash = false;
+    HEAL_DEMO_SWINGS.forEach(function(st){ if (tt >= st){ hits++; if (tt - st < 8) swing = true; if (tt - st < 5) flash = true; } });
+    var healed = tt >= HEAL_DEMO_SWINGS[4];
+    // the imp taking the hits
+    var imp = IMP_SPRITES.idle;
+    if (imp && imp.ready){
+      var iS = 0.2, iw = imp.naturalWidth * iS, ih = imp.naturalHeight * iS;
+      ctx.save();
+      ctx.translate(impX + (flash ? 2 : 0), groundY);
+      ctx.scale(-1, 1);
+      if (flash) ctx.filter = "brightness(2.4) saturate(0.3)";
+      ctx.drawImage(imp, -iw / 2, -ih, iw, ih);
+      ctx.restore();
+    }
+    // the hero
+    var key = swing ? "attack4" : "idle", img = PLAYER_SPRITES[key];
+    if (img && img.ready){
+      var S = 0.3, w = img.naturalWidth * S, h = img.naturalHeight * S;
+      ctx.save();
+      ctx.translate(heroX, groundY);
+      if (!SPRITE_FACES_RIGHT[key]) ctx.scale(-1, 1);
+      if (healed && tt - HEAL_DEMO_SWINGS[4] < 20) ctx.filter = "brightness(1.5) sepia(0.4) hue-rotate(290deg) saturate(2)";
+      ctx.drawImage(img, -w / 2 + (swing ? (PLAYER_SHIFT_X.attack4 || 0) * S : 0), -h, w, h);
+      ctx.restore();
+    }
+    // the five pips, filling with each hit (and emptying once it heals)
+    var shown = healed && tt - HEAL_DEMO_SWINGS[4] > 14 ? 0 : hits;
+    for (var i = 0; i < HEAL_EVERY; i++){
+      var px = dx + dw / 2 - 2 * 14 + i * 14, py = dy + 14;
+      ctx.fillStyle = i < shown ? "#ff8fd0" : "rgba(170,90,140,0.4)";
+      ctx.beginPath(); ctx.arc(px, py, 4.5, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "rgba(255,200,235,0.8)"; ctx.lineWidth = 1; ctx.stroke();
+    }
+    // the heal: a "+1" floats up off the hero
+    if (healed){
+      var age = tt - HEAL_DEMO_SWINGS[4];
+      if (age < 50){
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, (50 - age) / 15);
+        ctx.textAlign = "center";
+        ctx.font = "12px 'Press Start 2P', monospace";
+        ctx.lineWidth = 3; ctx.strokeStyle = "rgba(60,10,40,0.9)"; ctx.fillStyle = "#ffb3e2";
+        ctx.strokeText("+1", heroX, groundY - 44 - age * 0.5);
+        ctx.fillText("+1", heroX, groundY - 44 - age * 0.5);
+        ctx.restore();
+      }
+    }
+    // a tiny flask on the right that gains a notch on the heal
+    var fx = dx + dw + 36, fy = dy + 10, fw = 22, fh = 76, level = healed ? 3 : 2;
+    roundRect(fx - fw / 2, fy, fw, fh, 6);
+    ctx.fillStyle = "rgba(40,10,20,0.7)"; ctx.fill();
+    ctx.strokeStyle = "rgba(255,210,235,0.8)"; ctx.lineWidth = 1.5; ctx.stroke();
+    for (var k = 0; k < 4; k++){
+      var sy = fy + fh - 6 - (k + 1) * 17;
+      ctx.fillStyle = k < level ? (k === 2 && healed && tt - HEAL_DEMO_SWINGS[4] < 20 && Math.floor(tt / 3) % 2 ? "#ffe0f2" : "#d8283c") : "rgba(120,40,60,0.35)";
+      ctx.fillRect(fx - fw / 2 + 4, sy, fw - 8, 14);
+    }
+  }
+
   function drawFieldDemo(c, x, y){
     var dx = x + 24, dy = y + 64, dw = 262, dh = 96;
     roundRect(dx, dy, dw, dh, 8);
@@ -2706,13 +2799,13 @@
     ctx.globalAlpha = a;
 
     // panel
-    var dashCard = c.kind === "dash" || c.kind === "field";
+    var dashCard = c.kind === "dash" || c.kind === "field", healCard = c.kind === "heal";
     roundRect(x, y, CARD_W, CARD_H, 14);
-    ctx.fillStyle = dashCard ? "rgba(18,8,32,0.88)" : "rgba(6,16,30,0.86)";
+    ctx.fillStyle = healCard ? "rgba(34,8,26,0.88)" : dashCard ? "rgba(18,8,32,0.88)" : "rgba(6,16,30,0.86)";
     ctx.fill();
     ctx.lineWidth = 2;
-    ctx.strokeStyle = dashCard ? "rgba(200,160,255,0.85)" : "rgba(150,220,255,0.8)";
-    ctx.shadowColor = dashCard ? "rgba(160,100,255,0.8)" : "rgba(90,190,255,0.8)";
+    ctx.strokeStyle = healCard ? "rgba(255,170,220,0.85)" : dashCard ? "rgba(200,160,255,0.85)" : "rgba(150,220,255,0.8)";
+    ctx.shadowColor = healCard ? "rgba(255,110,190,0.8)" : dashCard ? "rgba(160,100,255,0.8)" : "rgba(90,190,255,0.8)";
     ctx.shadowBlur = 16;
     ctx.stroke();
     ctx.shadowBlur = 0;
@@ -2733,6 +2826,26 @@
       ctx.textAlign = "center";
       ctx.fillText("EVERY 3RD KILL RAISES IT FOR 5 SECONDS", VW/2, y + CARD_H - 24);
       ctx.fillText("ANYTHING THAT TOUCHES IT GETS SHOCKED", VW/2, y + CARD_H - 10);
+      ctx.restore();
+      return;
+    }
+    if (healCard){
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#ffc4e6";
+      ctx.font = "10px 'Press Start 2P', monospace";
+      ctx.fillText("NEW ABILITY", VW/2, y + 26);
+      ctx.fillStyle = "#fff0f8";
+      ctx.shadowColor = "rgba(255,110,190,0.9)";
+      ctx.shadowBlur = 12;
+      ctx.font = "20px 'Press Start 2P', monospace";
+      ctx.fillText("SWEET HEAL", VW/2, y + 54);
+      ctx.shadowBlur = 0;
+      drawHealDemo(c, x, y);
+      ctx.fillStyle = "#f7dcec";
+      ctx.font = "8px 'Press Start 2P', monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("EVERY 5 HITS YOU LAND HEAL YOU BY 1", VW/2, y + CARD_H - 24);
+      ctx.fillText("THE PINK PIPS UNDER YOUR FLASK COUNT THEM", VW/2, y + CARD_H - 10);
       ctx.restore();
       return;
     }
@@ -3128,6 +3241,7 @@
       potions:{}, human:false,
       wallHits:0, wallHitCd:0, wallBreakT:-1, wallGone:false,  // the Frozen Den's breakable ice wall
       hasForceField:false, ffKills:0, ffT:0,                   // Itay's heart: a force field every third kill
+      hasHeal:false, healHits:0, heals:0,                     // Agam's heart: heal 1 for every 5 sword hits
       crystalHits:0, crystalCd:0, crystalT:-1, crystalGone:false   // Glacier Falls' breakable crystals
     };
     mapOpen = false;
@@ -3170,6 +3284,13 @@
   var stageFade = 0;       // black fade-in after a stage change
   var stageBannerT = 0;    // how long the stage name stays on screen
   var STAGE_BANNER_TIME = 150;
+  // Camera x for a wanted position: kept inside the world, or, for a stage
+  // narrower than the screen (the Hidden Grotto), centred on it.
+  function clampCam(t){
+    if (WORLD_W < VW) return (WORLD_W - VW) / 2;
+    return Math.max(0, Math.min(WORLD_W - VW, t));
+  }
+
   function loadStage(index, from){
     if (timeAlive > 0) SFX.play("stage");
     vortexOpenT = -1; vortexEnterT = -1; vortexExit = null;
@@ -3193,6 +3314,7 @@
     icicles = [];
     souls = [];
     ghostBolts = [];
+    healPops = [];
     explosionParticles = [];
     explosionFlash = null;
 
@@ -3229,7 +3351,7 @@
       if (stage.entryLeft){ player.x = stage.entryLeft.x; player.y = stage.entryLeft.y - player.h; }   // e.g. through Glacier Falls' crystal gap
     }
     player.entryX = player.x;   // where to put the player back after a lava fall
-    camX = Math.max(0, Math.min(WORLD_W - VW, player.x + player.w/2 - VW/2));
+    camX = clampCam(player.x + player.w/2 - VW/2);
     camY = Math.max(stage.topY || 0, Math.min(0, player.y + player.h/2 - VH * 0.6));
     stageFade = index === PROLOGUE_STAGE && from === "left" && timeAlive === 0 ? 0 : 1;
     stageBannerT = STAGE_BANNER_TIME;
@@ -3329,10 +3451,19 @@
   // It floats above head height over its ledge: you have to stand on the
   // ledge and hop to grab it, so it can't be brushed from below.
   var POTION_FLOAT = 92;              // centre height above the ledge
-  function potionBox(pt){ return rect(pt[0] - 20, pt[1] - POTION_FLOAT - 26, 40, 50); }
+  function potionFloat(pt){ return pt[2] || POTION_FLOAT; }
+  function potionBox(pt){ return rect(pt[0] - 20, pt[1] - potionFloat(pt) - 26, 40, 50); }
+  // How much of a hidden flask shows: Glacier Falls' sits behind the
+  // crystals, and comes into view as the broken crystals fade away.
+  function potionShown(){
+    var st = STAGES[stageIndex];
+    if (!st.potionBehindCrystal || player.crystalGone) return 1;
+    if (player.crystalT < 0) return 0;
+    return Math.max(0, Math.min(1, (player.crystalT - CRYSTAL_HOLD) / CRYSTAL_FADE));
+  }
   function updatePotion(dt){
     var pt = STAGES[stageIndex].potion;
-    if (!pt || player.potions[stageIndex] || gameState !== "playing") return;
+    if (!pt || player.potions[stageIndex] || gameState !== "playing" || potionShown() < 1) return;
     if (!intersects(player, potionBox(pt))) return;
     player.potions[stageIndex] = true;
     growFlask(player);
@@ -3345,18 +3476,19 @@
     buzz([60, 40, 90]);
     for (var i = 0; i < 30; i++){
       var ang = Math.random() * Math.PI * 2, sp = 1 + Math.random() * 4, life = 22 + Math.random() * 22;
-      explosionParticles.push({ x: pt[0], y: pt[1] - POTION_FLOAT, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 1.5,
+      explosionParticles.push({ x: pt[0], y: pt[1] - potionFloat(pt), vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 1.5,
         life: life, maxLife: life, size: 1.5 + Math.random() * 2.5, color: ["255,90,90", "200,20,40", "255,200,160"][i % 3] });
     }
   }
   function drawPotion(){
-    var pt = STAGES[stageIndex].potion;
-    if (!pt || player.potions[stageIndex]) return;
+    var pt = STAGES[stageIndex].potion, shown = pt ? potionShown() : 0;
+    if (!pt || player.potions[stageIndex] || shown <= 0) return;
     var sx = pt[0] - camX;
     if (sx < -60 || sx > VW + 60) return;
-    var bob = Math.sin(timeAlive * 0.07) * 4, cy = pt[1] - POTION_FLOAT + bob;
+    var bob = Math.sin(timeAlive * 0.07) * 4, cy = pt[1] - potionFloat(pt) + bob;
     var pulse = 0.5 + 0.5 * Math.sin(timeAlive * 0.1);
     ctx.save();
+    ctx.globalAlpha = shown;
     var g = ctx.createRadialGradient(sx, cy, 3, sx, cy, 46);
     g.addColorStop(0, "rgba(255,70,80," + (0.35 + 0.25 * pulse).toFixed(2) + ")");
     g.addColorStop(1, "rgba(200,20,40,0)");
@@ -3376,6 +3508,38 @@
     } else {
       ctx.fillStyle = "#b0202c"; ctx.beginPath(); ctx.arc(sx, cy, 10, 0, Math.PI * 2); ctx.fill();
     }
+    ctx.restore();
+  }
+
+  // Dark stages (the Hidden Grotto): solid rock past the world's ends when
+  // it's narrower than the screen, then near-total darkness over everything
+  // with only a faint glow around you. Things more than a few steps away
+  // (like the grotto's flask) are barely a glimmer.
+  function drawDarkness(){
+    var st = STAGES[stageIndex];
+    if (!st.dark) return;
+    ctx.save();
+    var wl = -camX, wr = WORLD_W - camX;           // the world's ends on screen
+    if (wl > 0 || wr < VW){
+      ctx.fillStyle = "#070405";
+      if (wl > 0) ctx.fillRect(0, 0, wl, VH);
+      if (wr < VW) ctx.fillRect(wr, 0, VW - wr, VH);
+      // rough rock faces where the cave walls are
+      [[wl, 1], [wr, -1]].forEach(function(w){
+        var g = ctx.createLinearGradient(w[0], 0, w[0] + w[1] * 26, 0);
+        g.addColorStop(0, "rgba(7,4,5,1)"); g.addColorStop(1, "rgba(7,4,5,0)");
+        ctx.fillStyle = g;
+        ctx.fillRect(Math.min(w[0], w[0] + w[1] * 26), 0, 26, VH);
+      });
+    }
+    var px = player.x + player.w / 2 - camX, py = player.y + player.h / 2 - camY;
+    var flick = 1 + 0.04 * Math.sin(timeAlive * 0.13) + 0.02 * Math.sin(timeAlive * 0.37);
+    var g2 = ctx.createRadialGradient(px, py, 14, px, py, 150 * flick);
+    g2.addColorStop(0, "rgba(0,0,0,0.35)");
+    g2.addColorStop(0.45, "rgba(0,0,0,0.8)");
+    g2.addColorStop(1, "rgba(0,0,0,0.955)");
+    ctx.fillStyle = g2;
+    ctx.fillRect(0, 0, VW, VH);
     ctx.restore();
   }
 
@@ -3524,6 +3688,7 @@
     "17":   { x: 260, y: 244, w: 112, h: 56, name: "Root Hollow",   color: "#3e2a1c" },
     "18":   { x: 260, y: 314, w: 112, h: 56, name: "Dark Burrow",   color: "#2a1e18" },
     "19":   { x: 390, y: 314, w: 112, h: 56, name: "Deep Tunnels",  color: "#33241a" },
+    "20":   { x: 390, y: 174, w: 56,  h: 56, name: "Hidden Grotto", color: "#120c0a" },
     "6":    { x: 429, y: 64,  w: 34,  h: 32, name: "",              color: "#6a2616" },
     "7":    { x: 390, y: 104, w: 112, h: 56, name: "Obsidian Gate", color: "#2f5a7a" },
     // the shadow realm, reached only through the Frozen Den's portal:
@@ -3535,7 +3700,7 @@
   // doors between rooms: [roomA, roomB, x, y, vertical]
   var MAP_DOORS = [
     ["12", "0", -9, 28, false], ["0", "1", 121, 28, false], ["1", "4", 251, 28, false], ["4", "5", 381, 28, false],
-    ["1", "boss", 186, 60, true], ["8", "boss", 121, 132, false], ["13", "8", -9, 132, false], ["5", "14", 511, 14, false], ["15", "7", 381, 132, false], ["boss", "15", 251, 120, false], ["15", "16", 316, 170, true], ["16", "17", 316, 240, true], ["17", "18", 316, 310, true], ["18", "19", 381, 342, false],
+    ["1", "boss", 186, 60, true], ["8", "boss", 121, 132, false], ["13", "8", -9, 132, false], ["5", "14", 511, 14, false], ["15", "7", 381, 132, false], ["boss", "15", 251, 120, false], ["15", "16", 316, 170, true], ["16", "17", 316, 240, true], ["17", "18", 316, 310, true], ["18", "19", 381, 342, false], ["16", "20", 381, 202, false],
     ["5", "6", 446, 60, true], ["6", "7", 446, 100, true],
     ["9", "10", 816, -172, true], ["10", "11", 881, -222, false]
   ];
@@ -4318,7 +4483,7 @@
       player.y = (rsp ? rsp.y : GROUND_Y) - player.h;
       player.vy = 0;
       player.invuln = 65;
-      camX = Math.max(0, Math.min(WORLD_W - VW, player.x + player.w/2 - VW/2));
+      camX = clampCam(player.x + player.w/2 - VW/2);
       stageFade = 1;
     }
     if (stageFade > 0) stageFade = Math.max(0, stageFade - 0.04 * dt);
@@ -4403,6 +4568,7 @@
           en.x += (en.x + en.w/2 < player.x + player.w/2 ? -1 : 1) * 14;
           shake = Math.max(shake, 5);
           SFX.play("swat");
+          noteHit();
           hitSparks(en.x + en.w/2, en.y + en.h*0.4, player.facing, 10);
           impact(3, 20);
         }
@@ -4411,6 +4577,7 @@
         en.hitFlash = 10;
         score += 1;
         noteKill();
+        noteHit();
         shake = 8;
         SFX.play("impDie");
         hitSparks(en.x + en.w/2, en.y + en.h/2, player.facing, 16);
@@ -4447,11 +4614,12 @@
     if (gameState === "playing") shockBoss(dt);
     if (ghostBolts.length) updateGhostBolts(dt, hitbox);
     updateHeart(dt);
+    updateHealPops(dt);
     updateIceHeart(dt);
     updateFlask(dt);
 
     var targetCam = player.x + player.w/2 - VW/2;
-    targetCam = Math.max(0, Math.min(WORLD_W - VW, targetCam));
+    targetCam = clampCam(targetCam);
     camX += (targetCam - camX) * Math.min(1, 0.18*dt);
     // tall stages scroll up with the player (keeps them a bit below centre)
     var topY = STAGES[stageIndex].topY || 0;
@@ -4720,7 +4888,7 @@
     // getting hit
     var box = bossBox(b);
     if (b.state !== "waiting" && b.invuln <= 0){
-      if (hitbox && intersects(hitbox, box)) damageBoss(b, 1, 22);
+      if (hitbox && intersects(hitbox, box)){ damageBoss(b, 1, 22); noteHit(); }
       else if (player.superMode && intersects(player, box)) damageBoss(b, 1, 40);
     }
     if (b.state === "dead") return;
@@ -5064,6 +5232,58 @@
       ctx.restore();
     }
   }
+  // Agam's heart: every 5th sword hit that lands (on an enemy or a boss)
+  // heals 1. Five pink pips under the flask count toward the next one.
+  var HEAL_EVERY = 5;
+  var healPops = [];
+  function noteHit(){
+    if (!player.hasHeal) return;
+    player.healHits = (player.healHits || 0) + 1;
+    if (player.healHits < HEAL_EVERY) return;
+    player.healHits = 0;
+    if (player.hp >= player.maxHp) return;               // full flask: the charge is spent for nothing
+    player.hp += 1;
+    player.heals = (player.heals || 0) + 1;
+    SFX.play("heal", 0.8);
+    buzz(30);
+    var cx = player.x + player.w / 2, cy = player.y + player.h / 2;
+    healPops.push({ x: cx, y: player.y - 18, t: 0 });
+    for (var i = 0; i < 18; i++){
+      var ang = Math.random() * Math.PI * 2, sp = 1 + Math.random() * 2.5, life = 20 + Math.random() * 20;
+      explosionParticles.push({ x: cx, y: cy, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 1.5,
+        life: life, maxLife: life, size: 1.6 + Math.random() * 2.4, color: ["255,160,220", "255,235,150", "170,255,200"][i % 3] });
+    }
+  }
+  function updateHealPops(dt){
+    for (var i = healPops.length - 1; i >= 0; i--){ healPops[i].t += dt; if (healPops[i].t > 50) healPops.splice(i, 1); }
+  }
+  function drawHealPops(){
+    for (var i = 0; i < healPops.length; i++){
+      var h = healPops[i];
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, (50 - h.t) / 15);
+      ctx.textAlign = "center";
+      ctx.font = "16px 'Press Start 2P', monospace";
+      ctx.lineWidth = 4; ctx.strokeStyle = "rgba(60,10,40,0.9)";
+      ctx.fillStyle = "#ffb3e2";
+      ctx.strokeText("+1", h.x - camX, h.y - h.t * 0.6);
+      ctx.fillText("+1", h.x - camX, h.y - h.t * 0.6);
+      ctx.restore();
+    }
+  }
+  function drawHealPips(){
+    if (!player || !player.hasHeal) return;
+    var n = player.healHits || 0, y = hudPipAt.y + (player.hasForceField ? 16 : 0);
+    ctx.save();
+    for (var i = 0; i < HEAL_EVERY; i++){
+      var x = hudPipAt.x + (i - 2) * 12, on = i < n;
+      ctx.fillStyle = on ? "#ff8fd0" : "rgba(90,40,70,0.55)";
+      ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "rgba(50,8,34,0.9)"; ctx.lineWidth = 1.5; ctx.stroke();   // a dark rim reads on bright stages too
+    }
+    ctx.restore();
+  }
+
   // HUD: three pips under the flask, one per kill toward the next field
   var hudPipAt = { x: 58, y: 222 };                       // just under the flask's box (set by drawHUD)
   function drawFieldPips(){
@@ -5241,7 +5461,7 @@
         SFX.play("jump", 0.8); shake = Math.max(shake, 4);
         queenSparkles(b.x + (pcx > b.x ? 70 : -70), b.y - 80, 12, 3);
         player.vx = (pcx > b.x ? 1 : -1) * 9; player.vy = -6; player.x += (pcx > b.x ? 1 : -1) * 22;
-      } else damageQueen(b);
+      } else { damageQueen(b); noteHit(); }
     } else if (hittable && b.invuln <= 0 && b.state !== "shield" && player.superMode && intersects(player, box)){
       damageQueen(b);
     }
@@ -5491,7 +5711,7 @@
     var awake = b.state !== "waiting" && b.state !== "rise";
     var box = earthBox(b);
     if (awake && b.invuln <= 0){
-      if (hitbox && intersects(hitbox, box)) damageEarth(b);
+      if (hitbox && intersects(hitbox, box)){ damageEarth(b); noteHit(); }
       else if (player.superMode && intersects(player, box)) damageEarth(b);
     }
     if (awake && b.state !== "dead" && intersects(player, box)) hurtPlayer(b.x, b.state === "slam" ? "The Earth Golem pounded you into the floor." : "The Earth Golem flattened you.");
@@ -5810,6 +6030,7 @@
         for (var c = -1; c <= 1; c++) itayBolt(b, cp.x, cp.y, c * 0.28, 8 * mul);
       } else {
         damageItay(b);
+        noteHit();
       }
     } else if (hittable && b.invuln <= 0 && b.state !== "shield" && player.superMode && intersects(player, box)){
       damageItay(b);
@@ -5973,6 +6194,7 @@
       SFX.play("heal");
       player.hp = player.maxHp;                                 // like the golem's and the wyrm's: a full flask
       if (!h.sweet && !player.hasForceField){ player.hasForceField = true; abilityCard = { state: "pending", t: 0, kind: "field" }; }   // Itay's: ...and the force field, every third kill
+      if (h.sweet && !player.hasHeal){ player.hasHeal = true; player.healHits = 0; abilityCard = { state: "pending", t: 0, kind: "heal" }; }   // Agam's: ...and a heal for every 5 hits
       player.invuln = Math.max(player.invuln, 30);
       shake = Math.max(shake, 8);
       techHeartSparks(h, 40, 6);
@@ -6240,7 +6462,7 @@
     // getting hit
     var box = wyrmBox(b);
     if (b.state !== "waiting" && b.state !== "intro" && b.invuln <= 0){
-      if (hitbox && intersects(hitbox, box)) damageWyrm(b, 22);
+      if (hitbox && intersects(hitbox, box)){ damageWyrm(b, 22); noteHit(); }
       else if (player.superMode && intersects(player, box)) damageWyrm(b, 40);
     }
     if (b.state === "dead") return;
@@ -6499,7 +6721,7 @@
     var box = wraithBox(b);
     var hittable = b.state !== "waiting" && b.state !== "intro" && b.alpha > 0.5;
     if (hittable && b.invuln <= 0){
-      if (hitbox && intersects(hitbox, box)) damageWraith(b, 22);
+      if (hitbox && intersects(hitbox, box)){ damageWraith(b, 22); noteHit(); }
       else if (player.superMode && intersects(player, box)) damageWraith(b, 40);
     }
   }
@@ -7047,10 +7269,11 @@
   // A soft ember glow and arrow at any edge that leads to another stage.
   function drawExitHints(){
     var pulse = 0.5 + 0.5 * Math.sin(timeAlive * 0.1);
+    var hy = STAGES[stageIndex].hintY || {};    // the floor height at an exit, if it isn't the ground
     function hint(worldX, dir){
       var sx = worldX - camX;
       if (sx < -60 || sx > VW + 60) return;
-      var gy = GROUND_Y - 60;
+      var gy = (hy[dir < 0 ? "left" : "right"] || GROUND_Y) - 60;
       var g = ctx.createRadialGradient(sx, gy, 4, sx, gy, 110);
       g.addColorStop(0, "rgba(255,130,50," + (0.30 + 0.20*pulse).toFixed(2) + ")");
       g.addColorStop(1, "rgba(255,110,40,0)");
@@ -7063,8 +7286,9 @@
       ctx.textAlign = "left";
     }
     var exits = STAGES[stageIndex].exits || {};
-    if (exits.left !== undefined && gateOpen("left", true)) hint(0, -1);
-    if (exits.right !== undefined && !labLocked() && !STAGES[stageIndex].rightWall && gateOpen("right", true)) hint(WORLD_W, 1);   // over the tree is a secret
+    var hx = STAGES[stageIndex].hintX || {};
+    if (exits.left !== undefined && gateOpen("left", true)) hint(hx.left || 0, -1);
+    if (exits.right !== undefined && !labLocked() && !STAGES[stageIndex].rightWall && !STAGES[stageIndex].secretRight && gateOpen("right", true)) hint(WORLD_W, 1);   // over the tree is a secret
   }
 
   function drawStageBanner(){
@@ -7852,7 +8076,9 @@
     drawZaps();
     drawBossAttacks();
     drawExplosionFx();
+    drawHealPops();
     ctx.restore();
+    drawDarkness();
 
     drawSnow();
     if (freezeT > 0 && freezeT < 1 && stageIndex === 2) drawFrostRim();
@@ -7862,6 +8088,7 @@
     if (gameState === "playing" || gameState === "win" || gameState === "gameover"){
       drawHUD();
       drawFieldPips();
+      drawHealPips();
       drawBossBar();
     }
     if (gameState === "playing"){ drawStageBanner(); drawAbilityCard(); drawItemCard(); }
