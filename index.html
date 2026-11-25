@@ -511,7 +511,7 @@
         <button class="skipbtn" id="skipStoryBtn" type="button">SKIP &#9654;&#9654;</button>
       </div>
       <div class="endvideo" id="endVideoWrap" hidden>
-        <video id="introVideo" src="assets/intro.mp4" playsinline preload="auto" hidden></video>
+        <video id="introVideo" src="assets/intro.mp4?v=2" playsinline preload="auto" hidden></video>
         <video id="endVideo" src="assets/ending.mp4?v=2" playsinline preload="none" hidden></video>
         <button class="skipbtn" id="skipVideoBtn" type="button">SKIP &#9654;&#9654;</button>
       </div>
@@ -3551,9 +3551,11 @@
       minX = Math.min(minX, r.x); minY = Math.min(minY, r.y);
       maxX = Math.max(maxX, r.x + r.w); maxY = Math.max(maxY, r.y + r.h);
     });
-    var north = minY < 0;
-    var S = Math.min(1, 860 / (maxX - minX), 408 / (maxY - minY));
-    var pw = Math.max(600, (maxX - minX) * S + 60), ph = north ? (maxY - minY) * S + 110 : 330;
+    // the panel grows to fit what's been explored (title above, hint below),
+    // shrinking the map once it would no longer fit on screen
+    var S = Math.min(1, 860 / (maxX - minX), (VH - 16 - 110) / (maxY - minY));
+    var mapH = (maxY - minY) * S;
+    var pw = Math.max(600, (maxX - minX) * S + 60), ph = Math.max(330, mapH + 110);
     var px = VW/2 - pw/2, py = VH/2 - ph/2;
     ctx.save();
     ctx.fillStyle = "rgba(0,0,0,0.5)";
@@ -3573,7 +3575,7 @@
     ctx.font = "14px 'Press Start 2P', monospace";
     ctx.fillText("WORLD MAP", VW/2, py + 34);
 
-    var ox = px + (pw - (maxX - minX) * S) / 2 - minX * S, oy = py + (north ? 66 : 76) - minY * S;
+    var ox = px + (pw - (maxX - minX) * S) / 2 - minX * S, oy = py + 66 + (ph - 110 - mapH) / 2 - minY * S;
     // the shadow realm: a violet haze and a name over its lonely corner
     var realmSeen = visited["9"] || visited["10"] || visited["11"];
     if (realmSeen){
@@ -3615,15 +3617,22 @@
       if (name){
         ctx.fillStyle = "rgba(255,244,220,0.9)";
         ctx.font = nameFont + "px 'Press Start 2P', monospace";
-        var label = name.toUpperCase();
-        if (ctx.measureText(label).width > rw - 8 && label.indexOf(" ") > 0){
-          // too wide for its box: break after the first word ("ITAY'S" / "SECRET LAB")
-          var cut = label.indexOf(" ");
-          ctx.fillText(label.slice(0, cut), rx + rw/2, ry + 6 + nameFont);
-          ctx.fillText(label.slice(cut + 1), rx + rw/2, ry + 10 + nameFont * 2);
-        } else {
-          ctx.fillText(label, rx + rw/2, ry + 6 + nameFont);
+        // wrap the name word by word to fit its box ("AGAM'S" / "SQUISHY" /
+        // "FOREST"), and shrink the font if it still doesn't fit
+        var label = name.toUpperCase(), fs = nameFont, lines;
+        for (;;){
+          ctx.font = fs + "px 'Press Start 2P', monospace";
+          lines = [];
+          label.split(" ").forEach(function(w){
+            var last = lines.length - 1;
+            if (last >= 0 && ctx.measureText(lines[last] + " " + w).width <= rw - 8) lines[last] += " " + w;
+            else lines.push(w);
+          });
+          var widest = Math.max.apply(null, lines.map(function(l){ return ctx.measureText(l).width; }));
+          if (fs <= 4 || (widest <= rw - 6 && lines.length * (fs + 4) + 4 <= rh)) break;
+          fs -= 1;
         }
+        lines.forEach(function(l, li){ ctx.fillText(l, rx + rw/2, ry + 6 + fs + li * (fs + 4)); });
       }
     });
 
