@@ -4942,7 +4942,7 @@
     if (b.kind === "wraith"){ drawWraith(b); return; }
     if (b.kind === "itay"){ drawItay(b); if (b.heart) drawTechHeart(b.heart); return; }
     if (b.kind === "queen"){ drawQueen(b); if (b.heart) drawTechHeart(b.heart); return; }
-    if (b.kind === "earth"){ drawEarth(b); return; }
+    if (b.kind === "earth"){ drawEarth(b); if (b.heart) drawTechHeart(b.heart); return; }
     var img = BOSS_SPRITES[bossPose(b)];
     var sx = b.x - camX;
     ctx.save();
@@ -5656,7 +5656,18 @@
     if (b.hitFlash > 0) b.hitFlash -= dt;
     if (b.invuln > 0) b.invuln -= dt;
     updateEarthAttacks(dt, hitbox);
-    if (b.state === "dead"){ b.dead_t += dt; if (b.dead_t > 40 && b.dead_t < 44) { shake = Math.max(shake, 10); earthDust(b.x, GROUND_Y - 10, 30, 4); SFX.play("slam"); } return; }
+    if (b.state === "dead"){
+      var eBefore = b.dead_t;
+      b.dead_t += dt;
+      if (b.dead_t > 40 && b.dead_t < 44) { shake = Math.max(shake, 10); earthDust(b.x, GROUND_Y - 10, 30, 4); SFX.play("slam"); }
+      if (eBefore < 44 && b.dead_t >= 44){                // as he crumbles, his heart of roots and earth tumbles out
+        var edir = b.x > WORLD_W / 2 ? -1 : 1;
+        b.heart = { x: b.x, y: b.y - 110, vx: edir * 3.6, vy: -9, state: "fly", t: 0, roll: 0, bounced: false, earth: true };
+        earthDust(b.x, b.y - 110, 14, 3, ["255,170,80", "140,100,60", "90,65,40"]);
+      }
+      if (b.heart) updateTechHeart(b, dt);
+      return;
+    }
     var mul = b.phase2 ? 1.3 : 1;
     var pcx = player.x + player.w / 2;
     function faceP(){ if (Math.abs(pcx - b.x) > 12) b.facing = pcx > b.x ? 1 : -1; }
@@ -5829,6 +5840,10 @@
   [0, 1, 2, 3, 4].forEach(function(i){ TECH_HEART.beat.push(loadArt("assets/itay_heart_beat" + i + ".webp")); });
   [0, 1, 2, 3, 4, 5].forEach(function(i){ TECH_HEART.roll.push(loadArt("assets/itay_heart_roll" + i + ".webp")); });
   var TECH_HEART_S = 0.42;
+  // the Earth Golem's heart: roots, moss and stone, glowing amber in its veins
+  var EARTH_HEART = { beat: [], roll: [] }, EARTH_HEART_S = 0.66;
+  [0, 1, 2, 3, 4].forEach(function(i){ EARTH_HEART.beat.push(loadArt("assets/earth_heart_beat" + i + ".webp")); });
+  [0, 1, 2, 3, 4, 5].forEach(function(i){ EARTH_HEART.roll.push(loadArt("assets/earth_heart_roll" + i + ".webp")); });
 
   function makeItay(stage){
     return {
@@ -6160,7 +6175,7 @@
       var ang = -Math.PI * Math.random(), sp = 1 + Math.random() * power, life = 20 + Math.random() * 25;
       explosionParticles.push({ x: h.x, y: h.state === "fly" ? h.y : GROUND_Y - 24, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
         life: life, maxLife: life, size: 1.5 + Math.random() * 2.5,
-        color: (h.sweet ? ["255,160,220", "255,235,150", "170,220,255"] : ["120,230,255", "255,170,70", "220,250,255"])[i % 3] });
+        color: (h.earth ? ["255,170,80", "140,100,60", "170,210,120"] : h.sweet ? ["255,160,220", "255,235,150", "170,220,255"] : ["120,230,255", "255,170,70", "220,250,255"])[i % 3] });
     }
   }
   function updateTechHeart(b, dt){
@@ -6193,7 +6208,7 @@
       h.state = "taken"; h.t = 0;
       SFX.play("heal");
       player.hp = player.maxHp;                                 // like the golem's and the wyrm's: a full flask
-      if (!h.sweet && !player.hasForceField){ player.hasForceField = true; abilityCard = { state: "pending", t: 0, kind: "field" }; }   // Itay's: ...and the force field, every third kill
+      if (!h.sweet && !h.earth && !player.hasForceField){ player.hasForceField = true; abilityCard = { state: "pending", t: 0, kind: "field" }; }   // Itay's: ...and the force field, every third kill
       if (h.sweet && !player.hasHeal){ player.hasHeal = true; player.healHits = 0; abilityCard = { state: "pending", t: 0, kind: "heal" }; }   // Agam's: ...and a heal for every 5 hits
       player.invuln = Math.max(player.invuln, 30);
       shake = Math.max(shake, 8);
@@ -6204,7 +6219,7 @@
     var sx = h.x - camX;
     if (sx < -80 || sx > VW + 80) return;
     var img, s = 1;
-    var frames = h.sweet ? QUEEN_HEART : TECH_HEART;
+    var frames = h.earth ? EARTH_HEART : h.sweet ? QUEEN_HEART : TECH_HEART;
     if (h.state === "fly" || h.state === "roll") img = frames.roll[Math.floor(h.roll) % frames.roll.length];
     else {
       var ph = h.state === "rest" ? h.t % 60 : 0;
@@ -6218,14 +6233,15 @@
     var glow = h.state === "rest" ? 0.35 + 0.35 * Math.max(0, 1 - (h.t % 60) / 20) : h.state === "taken" ? 0 : 0.3;
     if (glow > 0){
       var g = ctx.createRadialGradient(sx, cy, 4, sx, cy, 75);
-      g.addColorStop(0, (h.sweet ? "rgba(255,200,235," : "rgba(110,220,255,") + glow.toFixed(2) + ")");
-      g.addColorStop(1, h.sweet ? "rgba(255,170,220,0)" : "rgba(60,150,255,0)");
+      g.addColorStop(0, (h.earth ? "rgba(255,170,80," : h.sweet ? "rgba(255,200,235," : "rgba(110,220,255,") + glow.toFixed(2) + ")");
+      g.addColorStop(1, h.earth ? "rgba(220,120,40,0)" : h.sweet ? "rgba(255,170,220,0)" : "rgba(60,150,255,0)");
       ctx.fillStyle = g; ctx.fillRect(sx - 75, cy - 75, 150, 150);
     }
     if (img && img.ready){
-      var S = (h.sweet ? QUEEN_HEART_S : TECH_HEART_S) * s * (h.state === "taken" ? 1 + h.t / 40 * 0.6 : 1);
+      var S = (h.earth ? EARTH_HEART_S : h.sweet ? QUEEN_HEART_S : TECH_HEART_S) * s * (h.state === "taken" ? 1 + h.t / 40 * 0.6 : 1);
       var w = img.naturalWidth * S, hh = img.naturalHeight * S;
       if (h.state === "taken") ctx.globalAlpha = Math.max(0, 1 - h.t / 40);
+      if (h.earth) ctx.filter = "brightness(1.3)";              // lifts it out of the dark cave
       // sits on the floor; centred while it tumbles
       var top = h.state === "fly" || h.state === "roll" ? cy - hh / 2 : GROUND_Y + 4 - hh;
       ctx.drawImage(img, sx - w / 2, top, w, hh);
@@ -6235,12 +6251,12 @@
       ctx.save();
       ctx.globalAlpha = Math.max(0, 1 - h.t / 40);
       ctx.textAlign = "center";
-      ctx.fillStyle = h.sweet ? "#ffe0f4" : "#d4f6ff";
-      ctx.shadowColor = h.sweet ? "rgba(255,110,200,0.9)" : "rgba(60,190,255,0.9)";
+      ctx.fillStyle = h.earth ? "#ffe2bf" : h.sweet ? "#ffe0f4" : "#d4f6ff";
+      ctx.shadowColor = h.earth ? "rgba(255,140,50,0.9)" : h.sweet ? "rgba(255,110,200,0.9)" : "rgba(60,190,255,0.9)";
       ctx.shadowBlur = 10;
       ctx.font = "12px 'Press Start 2P', monospace";
       ctx.fillText("FULL HEALTH", sx, GROUND_Y - 110 - h.t * 0.8);
-      if (h.sweet){ ctx.restore(); return; }
+      if (h.sweet || h.earth){ ctx.restore(); return; }
       ctx.fillStyle = "#e6c8ff"; ctx.shadowColor = "rgba(170,90,255,0.9)";
       ctx.fillText("FORCE FIELD", sx, GROUND_Y - 88 - h.t * 0.8);
       ctx.font = "8px 'Press Start 2P', monospace";
