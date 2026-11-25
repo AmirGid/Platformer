@@ -1043,7 +1043,7 @@
    ["squishy", "assets/squishy_background.jpg", 1.12, 0.06, "60,20,70"],
    // Glacier Falls: its painting is the level (drawn 1:1 with the world)
    ["glacier", "assets/glacier_background.jpg", 580 / 540, 0, "6,18,36"],
-   // Frozen Depths: a root cave, also drawn 1:1 with the world
+   // Sunken River: a root cave, also drawn 1:1 with the world
    ["depths", "assets/depths_background.jpg", 580 / 540, 0, "10,8,6"],
    // Root Hollow: deeper still, drawn 1:1 with the world
    ["hollow", "assets/hollow_background.jpg", 580 / 540, 0, "6,6,10"]].forEach(function(d){
@@ -1268,6 +1268,17 @@
       GHOST_SPRITES[k] = loadArt("assets/ghost_" + k + ".png");
     });
   })();
+
+  // Burrower: an earth wraith of the underground. ax = where its feet (or
+  // the bottom of its swirl) sit, as a fraction of the frame's width.
+  var BURROWER_S = 0.42;
+  var BURROWER_SPRITES = {};
+  [["idle0", 0.557], ["idle1", 0.487], ["idle2", 0.503],
+   ["bury0", 0.474], ["bury1", 0.486], ["bury2", 0.51], ["bury3", 0.51],
+   ["amb0", 0.5], ["amb1", 0.478], ["amb2", 0.28], ["amb3", 0.576],
+   ["die0", 0.545], ["die1", 0.51], ["die2", 0.5]].forEach(function(f){
+    BURROWER_SPRITES[f[0]] = loadArt("assets/burrower_" + f[0] + ".webp", { ax: f[1] });
+  });
 
   // Flying imp sprites (native art faces RIGHT). anchor = the glowing eyes,
   // which stay put between wing flaps, in source pixels.
@@ -1951,7 +1962,7 @@
       // West of the Obsidian Gate: a single frozen screen whose ledges are
       // the ones painted in its backdrop (the art is drawn 1:1 with the
       // world, so they line up). A hole under the ice arch drops into the
-      // Frozen Depths.
+      // Sunken River.
       name: "Glacier Falls",
       exits: { right: 7, left: 3 },   // west: through the crystals, off the low left shelf, into the fire boss's room
       crystalGate: { edge: 150, top: 120, shelf: 290, x: 92 },   // clear of the flask panel in the corner
@@ -1963,7 +1974,7 @@
       width: 1039,
       ground: [[0, 590], [690, 1039]],
       dropPit: { pit: 0, to: 16 },  // the hole under the arch
-      entryBelowX: 700,             // climbing back up from the Depths: pop up just east of the hole
+      entryBelowX: 700,             // climbing back up from the Sunken River: pop up just east of the hole
       platforms: [
         [0, 290, 170],              // low shelf, far left
         [170, 250, 285],            // high shelf with the crystals, left
@@ -1978,7 +1989,7 @@
       // in the middle is a fall (one hit, back to where you came in). The way
       // back is up where you dropped in: jump up off the top-left shelf,
       // through the beam of light, into Glacier Falls' hole.
-      name: "Frozen Depths",
+      name: "Sunken River",
       exits: {},
       exitTop: { y: 40, to: 15, x0: 180, x1: 340 },
       summit: [195, 140, 130],      // beam of light marking the way up
@@ -2005,12 +2016,12 @@
       enemies: []
     },
     {
-      // Below the Frozen Depths' river: a deep root hollow over a chasm.
+      // Below the Sunken River's water: a deep root hollow over a chasm.
       // The painting is the level again: the mossy arch on the left is one
       // curved slope, the stone stairs in the middle step down to the right,
       // and rocks float over the chasm up to a ledge on the far right. You
       // drop in onto the big floating rock; jump straight up off it to climb
-      // back into the Depths. The chasm is a fall (one hit, back on that rock).
+      // back into the Sunken River. The chasm is a fall (one hit, back on that rock).
       name: "Root Hollow",
       exits: {},
       backdrop: "hollow",
@@ -2033,7 +2044,8 @@
         [447, 173, 44], [509, 155, 109], [629, 186, 52], [702, 199, 93],     // floating rocks
         [837, 186, 202]                                                      // mossy ledge, far right
       ],
-      enemies: []
+      enemies: [],
+      burrowers: [[340, 0, 430]]    // [x, lo, hi]: tunnels along the floor between lo and hi
     },
     {
       // Through the black cave mouth in the Root Hollow. Empty for now; the
@@ -2048,7 +2060,8 @@
       door: { x0: 60, x1: 190, to: 17 },
       doorIn: 125,
       platforms: [],
-      enemies: []
+      enemies: [],
+      burrowers: [[620, 260, 1200], [1000, 480, 1200]]
     },
     {
       // East of the Dark Burrow: the Earth Golem's lair. He lies buried at the
@@ -2143,6 +2156,96 @@
     en.vy += GRAVITY * dt;
     if (en.vy > MAX_FALL) en.vy = MAX_FALL;
     moveAndCollide(en, allPlatforms);
+    en.vx = saveVx;
+  }
+
+  // ---------- Burrower (underground stages) ----------
+  // It drifts about in the open until it spots you, then sinks into the
+  // earth. Buried, it's a mound of dirt that tunnels after you along the
+  // floor (it can't be hit, and it can't hurt you). Once it's right under
+  // you the mound shakes (the tell: move!), then it bursts out and leaps up
+  // claws first. After landing it stays out a while: that's your chance.
+  // Two hits; the first sends it back underground.
+  var BURROW_SIGHT = 380, BURROW_SPEED = 2.3, BURROW_TELL = 30, BURROW_OUT = 120;
+  function makeBurrower(e){
+    return { burrower: true, x: e[0], y: GROUND_Y - 70, w: 34, h: 70, vx: 0, vy: 0, lo: e[1], hi: e[2],
+      state: "idle", t: 0, anim: Math.random() * 40, facing: -1, buried: false, dust: [],
+      alive: true, hitFlash: 0, walkCycle: 0, dead_t: 0, hp: 2, hurtT: 0, atkT: 0 };
+  }
+  function burrowDust(en, n, up){
+    var cx = en.x + en.w/2, fy = en.y + en.h;
+    for (var i = 0; i < n; i++)
+      en.dust.push({ x: cx + (Math.random() - 0.5) * 40, y: fy - 4, vx: (Math.random() - 0.5) * 3 - en.vx * 0.4,
+        vy: -Math.random() * (up || 3) - 1, t: 0, life: 22 + Math.random() * 18, r: 2 + Math.random() * 3 });
+  }
+  function updateBurrower(en, dt){
+    en.t += dt; en.anim += dt;
+    if (en.hurtT > 0) en.hurtT -= dt;
+    for (var i = en.dust.length - 1; i >= 0; i--){
+      var d = en.dust[i]; d.t += dt; d.x += d.vx * dt; d.y += d.vy * dt; d.vy += 0.25 * dt;
+      if (d.t > d.life) en.dust.splice(i, 1);
+    }
+    var pcx = player.x + player.w/2, ecx = en.x + en.w/2, dx = pcx - ecx;
+    // you're "in reach" when you're on (or just above) its stretch of floor
+    var floorY = en.y + en.h;
+    var inReach = pcx > en.lo - 40 && pcx < en.hi + 40 && player.y + player.h > floorY - 190 && player.y < floorY + 10
+                  && gameState === "playing";
+    var s = en.state;
+    if (s === "idle"){
+      en.buried = false;
+      en.vx = 0;
+      if (Math.abs(dx) < 200) en.facing = dx > 0 ? 1 : -1;
+      if (en.t > 40 && inReach && Math.abs(dx) < BURROW_SIGHT && en.hurtT <= 0){ en.state = "bury"; en.t = 0; SFX.play("swing", near(ecx, en.y) * 0.5); }
+    } else if (s === "bury"){
+      en.vx = 0;
+      if (en.t > 6 && en.t < 30 && Math.random() < 0.4 * dt) burrowDust(en, 1, 2);
+      if (en.t > 40){ en.state = "burrow"; en.t = 0; en.buried = true; }
+    } else if (s === "burrow"){
+      en.buried = true;
+      // tunnels after you; waits where it is if you're out of reach
+      var want = inReach ? Math.max(-1, Math.min(1, dx / 30)) : 0;
+      en.vx += (want * BURROW_SPEED - en.vx) * Math.min(1, 0.12 * dt);
+      if (Math.abs(en.vx) > 0.3 && Math.random() < 0.5 * dt) burrowDust(en, 1, 2.5);
+      if (inReach && Math.abs(dx) < 22 && en.t > 30){ en.state = "tell"; en.t = 0; en.vx = 0; SFX.play("slam", near(ecx, en.y) * 0.35); }
+    } else if (s === "tell"){
+      en.buried = true; en.vx = 0;
+      if (Math.random() < 0.8 * dt) burrowDust(en, 1, 4);
+      if (en.t > BURROW_TELL){
+        en.state = "burst"; en.t = 0; en.buried = false;
+        en.facing = dx >= 0 ? 1 : -1;
+        burrowDust(en, 16, 7);
+        shake = Math.max(shake, 5);
+        SFX.play("leap", near(ecx, en.y));
+      }
+    } else if (s === "burst"){
+      en.vx = 0;
+      if (en.t > 12){
+        // the leap: straight up out of the ground, angled after you
+        en.state = "leap"; en.t = 0;
+        en.vy = -10.5; en.vx = Math.max(-2.5, Math.min(2.5, dx / 14));
+        en.facing = dx >= 0 ? 1 : -1;
+      }
+    } else if (s === "leap"){
+      if (en.onGround && en.t > 6){ en.state = "land"; en.t = 0; en.vx = 0; burrowDust(en, 8, 3); }
+    } else if (s === "land"){
+      en.vx = 0;
+      if (en.t > 14){ en.state = "out"; en.t = 0; }
+    } else if (s === "out"){
+      // drifts toward you a little while it's out of the ground
+      en.facing = dx >= 0 ? 1 : -1;
+      en.vx = en.hurtT > 0 || Math.abs(dx) < 24 ? 0 : en.facing * 0.7;
+      if (en.t > BURROW_OUT){ en.state = "bury"; en.t = 0; }
+    }
+    // the first hit knocks it back under
+    if (en.hurtT > 0 && (s === "out" || s === "land" || s === "idle")){ en.state = "bury"; en.t = 0; }
+    en.walkCycle += 0.1 * dt;
+    var saveVx = en.vx;
+    en.vy += GRAVITY * dt;
+    if (en.vy > MAX_FALL) en.vy = MAX_FALL;
+    moveAndCollide(en, allPlatforms);
+    landOnSlope(en);
+    if (en.x < en.lo){ en.x = en.lo; }
+    if (en.x + en.w > en.hi){ en.x = en.hi - en.w; }
     en.vx = saveVx;
   }
 
@@ -3037,7 +3140,8 @@
         enemies: s.enemies.map(function(e){ return makeEnemy(e[0],e[1],e[2],e[3],e[4], frost); })
                    .concat((s.flyers || []).map(function(route, i){ var f = makeFlyer(route, i); f.frost = frost; return f; }))
                    .concat((s.shades || []).map(makeShade))
-                   .concat((s.ghosts || []).map(makeGhost)),
+                   .concat((s.ghosts || []).map(makeGhost))
+                   .concat((s.burrowers || []).map(makeBurrower)),
         boss: s.boss === "wyrm" ? makeWyrm(s) : s.boss === "wraith" ? makeWraith(s) : s.boss === "itay" ? makeItay(s) : s.boss === "queen" ? makeQueen(s) : s.boss === "earth" ? makeEarth(s) : s.boss ? makeBoss(s.width) : null
       };
     });
@@ -3416,7 +3520,7 @@
     "13":   { x: -130, y: 104, w: 112, h: 56, name: "Itay's Secret Lab", color: "#24506e" },
     "14":   { x: 520, y: 0,   w: 112, h: 56, name: "Agam's squishy forest", color: "#a0508a" },
     "15":   { x: 260, y: 104, w: 112, h: 56, name: "Glacier Falls", color: "#3f7898" },
-    "16":   { x: 260, y: 174, w: 112, h: 56, name: "Frozen Depths", color: "#5a3a22" },
+    "16":   { x: 260, y: 174, w: 112, h: 56, name: "Sunken River", color: "#5a3a22" },
     "17":   { x: 260, y: 244, w: 112, h: 56, name: "Root Hollow",   color: "#3e2a1c" },
     "18":   { x: 260, y: 314, w: 112, h: 56, name: "Dark Burrow",   color: "#2a1e18" },
     "19":   { x: 390, y: 314, w: 112, h: 56, name: "Deep Tunnels",  color: "#33241a" },
@@ -4254,6 +4358,7 @@
         en.dead_t += dt;
         if (en.shockT > 0) en.shockT -= dt;
         if (en.flyer){ en.vy += 0.5 * dt; en.cy += en.vy * dt; en.y = en.cy - en.h/2; }   // tumbles out of the air
+        if (en.burrower && !en.onGround){ en.vx = 0; en.vy += GRAVITY * dt; moveAndCollide(en, allPlatforms); }   // drops if killed mid-leap
         continue;
       }
       if (en.flyer){
@@ -4262,6 +4367,9 @@
         updateGhost(en, dt);
       } else if (en.shade){
         updateShade(en, dt);
+      } else if (en.burrower){
+        updateBurrower(en, dt);
+        if (en.buried){ if (en.hitFlash > 0) en.hitFlash -= dt; continue; }   // a mound of dirt: nothing to hit, nothing to touch
       } else if (en.golem){
         updateGolem(en, dt);
         if (en.y > VH + 40){ en.alive = false; en.dead_t = 99; continue; }
@@ -4320,7 +4428,7 @@
         if (player.hp <= 0){
           player.hp = 0;
           gameState = "gameover"; SFX.play("gameover");
-          showOverlay("YOU DIED", (en.golem ? "The frost golems crushed you." : en.shade ? "The scythe wraiths reaped you." : en.ghost ? "The wailing ghosts dragged you under." : "The imps got the better of you.") + " Score: " + score + " · Time: " + Math.floor(timeAlive/60) + "s", "Try Again");
+          showOverlay("YOU DIED", (en.golem ? "The frost golems crushed you." : en.burrower ? "A burrower dragged you under." : en.shade ? "The scythe wraiths reaped you." : en.ghost ? "The wailing ghosts dragged you under." : "The imps got the better of you.") + " Score: " + score + " · Time: " + Math.floor(timeAlive/60) + "s", "Try Again");
         }
       }
     }
@@ -6806,7 +6914,7 @@
       var sx = pits[i][0] - camX, w = pits[i][1] - pits[i][0];
       if (sx + w < 0 || sx > VW) continue;
       if (drop && drop.pit === i){ if (!drop.painted) drawShaft(sx, w); continue; }
-      if (STAGES[stageIndex].paintedLevel) continue;    // the gap is painted (e.g. the Depths' river)
+      if (STAGES[stageIndex].paintedLevel) continue;    // the gap is painted (e.g. the Sunken River's water)
       if (icy){ drawChasm(sx, w, i); continue; }
       if (STAGES[stageIndex].realm){ drawVoid(sx, w, i); continue; }
       var g = ctx.createLinearGradient(0, GROUND_Y, 0, VH);
@@ -7104,7 +7212,76 @@
     ctx.restore();
   }
 
+  function burrowerFrame(en){
+    if (!en.alive) return en.dead_t < 10 ? "die0" : en.dead_t < 22 ? "die1" : "die2";
+    switch (en.state){
+      case "bury":  return "bury" + Math.min(3, Math.floor(en.t / 10));
+      case "burst": return en.t < 6 ? "amb0" : "amb1";
+      case "leap":  return en.vy < 1 ? "amb2" : "amb3";
+      case "land":  return "amb3";
+      default:      return "idle" + (Math.floor(en.anim * 0.08) % 3);
+    }
+  }
+  function drawBurrower(en){
+    var life = 120;
+    if (!en.alive && en.dead_t > life) return;
+    var cx = en.x + en.w/2, sx = cx - camX, footY = en.y + en.h + 2;
+    if (sx < -140 || sx > VW + 140) return;
+    ctx.save();
+    // dust kicked up by the digging
+    en.dust.forEach(function(d){
+      ctx.globalAlpha = Math.max(0, 1 - d.t / d.life) * 0.8;
+      ctx.fillStyle = "#6b5236";
+      ctx.beginPath(); ctx.arc(d.x - camX, d.y, d.r, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+    if (en.alive && en.buried){
+      // the moving burrow: a mound of churned earth, shaking before it bursts
+      var heap = BURROWER_SPRITES.bury3;
+      var k = 0.95, jit = en.state === "tell" ? (Math.random() - 0.5) * 5 : Math.sin(en.anim * 0.5) * 0.8;
+      var swell = en.state === "tell" ? 1 + 0.12 * Math.min(1, en.t / BURROW_TELL) : 1;
+      if (en.state === "tell"){
+        // a glow in the cracks so the tell reads in the dark
+        var g = ctx.createRadialGradient(sx, footY - 8, 2, sx, footY - 8, 46);
+        g.addColorStop(0, "rgba(255,170,70," + (0.25 + 0.2 * Math.sin(en.t * 0.8)).toFixed(2) + ")");
+        g.addColorStop(1, "rgba(255,120,40,0)");
+        ctx.fillStyle = g; ctx.fillRect(sx - 46, footY - 54, 92, 60);
+      }
+      ctx.translate(sx + jit, footY);
+      ctx.scale(swell, swell);
+      ctx.filter = "brightness(1.6) contrast(1.1)";   // the cave art is dark: lift the dirt out of it
+      if (heap.ready){
+        var hw = heap.naturalWidth * BURROWER_S * k, hh = heap.naturalHeight * BURROWER_S * k;
+        ctx.drawImage(heap, -hw * heap.ax, -hh, hw, hh);
+      } else {
+        ctx.fillStyle = "#4a3624"; ctx.beginPath(); ctx.ellipse(0, -6, 28, 10, 0, Math.PI, 0); ctx.fill();
+      }
+      ctx.restore();
+      return;
+    }
+    var img = BURROWER_SPRITES[burrowerFrame(en)];
+    if (!en.alive) ctx.globalAlpha = Math.max(0, Math.min(1, (life - en.dead_t) / 30));
+    if (en.alive){
+      // a faint ember haze so it reads against the dark cave walls
+      var hz = ctx.createRadialGradient(sx, footY - 46, 6, sx, footY - 46, 62);
+      hz.addColorStop(0, "rgba(255,170,90,0.22)");
+      hz.addColorStop(1, "rgba(255,140,60,0)");
+      ctx.fillStyle = hz; ctx.fillRect(sx - 62, footY - 108, 124, 124);
+    }
+    ctx.translate(sx, footY);
+    if (en.facing < 0) ctx.scale(-1, 1);
+    ctx.filter = en.hitFlash > 0 ? "brightness(2.4) saturate(0.5)" : "brightness(1.5) contrast(1.1)";
+    if (img.ready){
+      var w = img.naturalWidth * BURROWER_S, h = img.naturalHeight * BURROWER_S;
+      ctx.drawImage(img, -w * img.ax, -h, w, h);
+    } else {
+      ctx.fillStyle = "#3a2a1c"; ctx.fillRect(-en.w/2, -en.h, en.w, en.h);
+    }
+    ctx.restore();
+  }
+
   function drawEnemy(en){
+    if (en.burrower){ drawBurrower(en); return; }
     if (en.ghost){ drawGhost(en); return; }
     if (en.shade){ drawShade(en); return; }
     if (en.flyer){ drawFlyer(en); return; }
