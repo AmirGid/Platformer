@@ -1575,7 +1575,8 @@
       // Not entered through an exit: the Molten Core turns into this stage
       // once the golem is dead. Same floor and width, so the swap is seamless.
       name: "Frozen Spire",
-      exits: { left: 8 },           // right: E, not built yet
+      exits: { left: 8, right: 15 },  // east: once Glacier Falls' crystals are broken, into Glacier Falls
+      crystalBehind: true,
       backdrop: "frost",
       ice: true,
       oneWay: true,
@@ -1952,7 +1953,9 @@
       // world, so they line up). A hole under the ice arch drops into the
       // Frozen Depths.
       name: "Glacier Falls",
-      exits: { right: 7 },
+      exits: { right: 7, left: 3 },   // west: through the crystals, off the low left shelf, into the fire boss's room
+      crystalGate: { edge: 150, top: 120, shelf: 290, x: 92 },   // clear of the flask panel in the corner
+      entryLeft: { x: 30, y: 290 },   // coming back from the boss room: out on the low left shelf
       backdrop: "glacier",
       paintedLevel: true,           // the backdrop is the level: no ground or ledge art drawn over it
       ice: true,
@@ -3021,7 +3024,8 @@
       canDash:false, dashes:0, dashT:0, dashCd:0, airDashUsed:false, dashTrail:[],
       potions:{}, human:false,
       wallHits:0, wallHitCd:0, wallBreakT:-1, wallGone:false,  // the Frozen Den's breakable ice wall
-      hasForceField:false, ffKills:0, ffT:0                    // Itay's heart: a force field every third kill
+      hasForceField:false, ffKills:0, ffT:0,                   // Itay's heart: a force field every third kill
+      crystalHits:0, crystalCd:0, crystalT:-1, crystalGone:false   // Glacier Falls' breakable crystals
     };
     mapOpen = false;
     itemCard = null;
@@ -3118,6 +3122,7 @@
     } else {
       player.x = 40;
       player.facing = 1;
+      if (stage.entryLeft){ player.x = stage.entryLeft.x; player.y = stage.entryLeft.y - player.h; }   // e.g. through Glacier Falls' crystal gap
     }
     player.entryX = player.x;   // where to put the player back after a lava fall
     camX = Math.max(0, Math.min(WORLD_W - VW, player.x + player.w/2 - VW/2));
@@ -3426,7 +3431,7 @@
   // doors between rooms: [roomA, roomB, x, y, vertical]
   var MAP_DOORS = [
     ["12", "0", -9, 28, false], ["0", "1", 121, 28, false], ["1", "4", 251, 28, false], ["4", "5", 381, 28, false],
-    ["1", "boss", 186, 60, true], ["8", "boss", 121, 132, false], ["13", "8", -9, 132, false], ["5", "14", 511, 14, false], ["15", "7", 381, 132, false], ["15", "16", 316, 170, true], ["16", "17", 316, 240, true], ["17", "18", 316, 310, true], ["18", "19", 381, 342, false],
+    ["1", "boss", 186, 60, true], ["8", "boss", 121, 132, false], ["13", "8", -9, 132, false], ["5", "14", 511, 14, false], ["15", "7", 381, 132, false], ["boss", "15", 251, 120, false], ["15", "16", 316, 170, true], ["16", "17", 316, 240, true], ["17", "18", 316, 310, true], ["18", "19", 381, 342, false],
     ["5", "6", 446, 60, true], ["6", "7", 446, 100, true],
     ["9", "10", 816, -172, true], ["10", "11", 881, -222, false]
   ];
@@ -4147,11 +4152,11 @@
 
     // Walking off an edge that has an exit moves to that stage.
     var exits = STAGES[stageIndex].exits || {};
-    if (player.x + player.w >= WORLD_W && player.vx > 0 && exits.right !== undefined && !labLocked()){
+    if (player.x + player.w >= WORLD_W && player.vx > 0 && exits.right !== undefined && !labLocked() && gateOpen("right")){
       loadStage(exits.right, "left");
       return;
     }
-    if (player.x <= 0 && player.vx < 0 && exits.left !== undefined){
+    if (player.x <= 0 && player.vx < 0 && exits.left !== undefined && gateOpen("left")){
       loadStage(exits.left, "right");
       return;
     }
@@ -4161,6 +4166,10 @@
     if (throughWall && player.x <= 0 && player.vx < 0){ loadStage(lwall.breakTo, "right"); return; }
     if (lwall && !throughWall && player.x < lwall.edge){ player.x = lwall.edge; if (player.vx < 0) player.vx = 0; }
     if (STAGES[stageIndex].rightWall && player.x + player.w > TREE_WALL_EDGE() && player.y + player.h > TREE_TOP_Y + 12){ player.x = TREE_WALL_EDGE() - player.w; if (player.vx > 0) player.vx = 0; }
+    var cg = STAGES[stageIndex].crystalGate;
+    if (cg && !player.crystalGone && player.x < cg.edge && player.y + player.h > cg.top && player.y + player.h <= cg.shelf + 12){
+      player.x = cg.edge; if (player.vx < 0) player.vx = 0;
+    }
     var aw = STAGES[stageIndex].arenaWall;
     if (aw && arenaWallUp() && player.x < aw[1] + 6){ player.x = aw[1] + 6; if (player.vx < 0) player.vx = 0; }
     if (player.x + player.w > WORLD_W) player.x = WORLD_W - player.w;
@@ -4237,6 +4246,7 @@
     }
 
     updateIceWall(dt, hitbox);
+    updateCrystalGate(dt, hitbox);
 
     for (var i=0;i<enemies.length;i++){
       var en = enemies[i];
@@ -6936,8 +6946,8 @@
       ctx.textAlign = "left";
     }
     var exits = STAGES[stageIndex].exits || {};
-    if (exits.left !== undefined) hint(0, -1);
-    if (exits.right !== undefined && !labLocked() && !STAGES[stageIndex].rightWall) hint(WORLD_W, 1);   // over the tree is a secret
+    if (exits.left !== undefined && gateOpen("left", true)) hint(0, -1);
+    if (exits.right !== undefined && !labLocked() && !STAGES[stageIndex].rightWall && gateOpen("right", true)) hint(WORLD_W, 1);   // over the tree is a secret
   }
 
   function drawStageBanner(){
@@ -7638,6 +7648,7 @@
     }
     drawProps();
     drawArenaWall();
+    drawCrystalGate();
     drawRightWall();
     drawSummit();
     drawFinishGate();
@@ -8009,6 +8020,60 @@
     var w = treeWallW(), x = WORLD_W - w - camX;
     if (x > VW) return;
     ctx.drawImage(trimmedTree(), x, GROUND_Y + 40 - TREE_H, w, TREE_H);
+  }
+  // Glacier Falls' crystal cluster: it seals the passage west off the low
+  // left shelf. The first hit cracks it, the second shatters it; it holds a
+  // moment, fades, and the way west into the fire boss's room is open (for
+  // good, both ways). stage.crystalGate = { edge, top, shelf, x }:
+  //   edge = the cluster's east face, top/shelf = the band it blocks, x = its centre.
+  var CRYSTAL_ART = [0, 1, 2].map(function(i){ return loadArt("assets/glacier_crystal_" + i + ".webp"); });
+  var CRYSTAL_H = 170, CRYSTAL_HOLD = 26, CRYSTAL_FADE = 34;
+  function gateOpen(side, forHint){
+    var st = STAGES[stageIndex], cg = st.crystalGate;
+    if (cg && side === "left"){
+      if (!player.crystalGone) return false;
+      return forHint || player.y + player.h <= cg.shelf + 12;     // only off the shelf, not the cave floor below
+    }
+    if (st.crystalBehind && side === "right") return !!player.crystalGone;
+    return true;
+  }
+  function updateCrystalGate(dt, hitbox){
+    var cg = STAGES[stageIndex].crystalGate, p = player;
+    if (!cg || p.crystalGone) return;
+    if (p.crystalCd > 0) p.crystalCd -= dt;
+    if (p.crystalT >= 0 && p.crystalHits >= 2){
+      p.crystalT += dt;
+      if (p.crystalT > CRYSTAL_HOLD + CRYSTAL_FADE){ p.crystalGone = true; }
+      return;
+    }
+    var box = rect(cg.x - 60, cg.shelf - CRYSTAL_H + 20, 120, CRYSTAL_H - 20);
+    if (!hitbox || p.crystalCd > 0 || !intersects(hitbox, box)) return;
+    p.crystalCd = 20;
+    p.crystalHits = (p.crystalHits || 0) + 1;
+    var last = p.crystalHits >= 2;
+    playIceBreak();
+    shake = Math.max(shake, last ? 14 : 7);
+    buzz(last ? [60, 40, 120] : [40]);
+    hitStop = Math.max(hitStop, 4);
+    for (var i = 0; i < (last ? 46 : 18); i++){
+      var ang = Math.PI * (0.55 + Math.random() * 0.9), sp = 1.5 + Math.random() * (last ? 6 : 4), life = 20 + Math.random() * 26;
+      explosionParticles.push({ x: cg.edge - 10, y: cg.shelf - 40 - Math.random() * 90, vx: -Math.cos(ang) * sp * -1, vy: -Math.abs(Math.sin(ang)) * sp,
+        life: life, maxLife: life, size: 1.5 + Math.random() * 3, color: ["235,250,255", "150,215,255", "90,170,230"][i % 3] });
+    }
+    if (last) p.crystalT = 0;
+  }
+  function drawCrystalGate(){
+    var cg = STAGES[stageIndex].crystalGate, p = player;
+    if (!cg || !p || p.crystalGone) return;
+    var hits = Math.min(2, p.crystalHits || 0), a = CRYSTAL_ART[hits];
+    if (!a.ready) a = CRYSTAL_ART[0];
+    if (!a.ready) return;
+    var h = CRYSTAL_H, w = h * a.naturalWidth / a.naturalHeight;
+    if (hits === 2) { var a0 = CRYSTAL_ART[0]; if (a0.ready) w = h * a0.naturalWidth / a0.naturalHeight; h = w * a.naturalHeight / a.naturalWidth; }   // the broken frame is shorter: same width, same base
+    var alpha = p.crystalT > CRYSTAL_HOLD ? Math.max(0, 1 - (p.crystalT - CRYSTAL_HOLD) / CRYSTAL_FADE) : 1;
+    ctx.save(); ctx.globalAlpha = alpha;
+    ctx.drawImage(a, cg.x - w / 2 - camX, cg.shelf + 10 - h, w, h);
+    ctx.restore();
   }
   function drawLeftWall(){
     var lw = STAGES[stageIndex].leftWall, a = ICE_WALL[0];
